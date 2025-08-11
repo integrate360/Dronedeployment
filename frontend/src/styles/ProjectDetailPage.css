@@ -1,183 +1,185 @@
 /* frontend/src/styles/ProjectDetailPage.css */
 
 .project-detail-container {
-    display: flex;
-    height: 100vh;
-    width: 100vw;
-    background-color: #f0f2f5;
-    color: #333;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  background-color: #f0f2f5;
+  color: #333;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", sans-serif;
 }
 
 .loading-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    width: 100vw;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  width: 100vw;
 }
 
 /* Left Panel */
 .left-panel {
-    width: 320px;
-    flex-shrink: 0;
-    background-color: #ffffff;
-    border-right: 1px solid #e8e8e8;
-    display: flex;
-    flex-direction: column;
-    padding: 1.5rem;
+  width: 320px;
+  flex-shrink: 0;
+  background-color: #ffffff;
+  border-right: 1px solid #e8e8e8;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
 }
 
 .panel-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
 }
 
 .plan-title {
-    font-size: 1.25rem;
-    font-weight: 600;
-    margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
 }
 
 .stats-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-    margin-bottom: 2rem;
-    text-align: center;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  text-align: center;
 }
 
 .stats-grid div span {
-    font-size: 1.5rem;
-    font-weight: 600;
+  font-size: 1.5rem;
+  font-weight: 600;
 }
 
 .stats-grid div p {
-    font-size: 0.8rem;
-    color: #888;
-    margin: 0;
+  font-size: 0.8rem;
+  color: #888;
+  margin: 0;
 }
 
 .control-section {
-    margin-bottom: 1.5rem;
+  margin-bottom: 1.5rem;
 }
 
 .control-section h4 {
-    margin-bottom: 0.75rem;
-    font-weight: 500;
+  margin-bottom: 0.75rem;
+  font-weight: 500;
 }
 
 .control-section.toggle-section {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.75rem 0;
-    border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .control-section .ant-slider {
-    margin: 0;
+  margin: 0;
 }
 
 .control-section span {
-    text-align: right;
-    display: block;
-    margin-top: 0.5rem;
-    color: #555;
+  text-align: right;
+  display: block;
+  margin-top: 0.5rem;
+  color: #555;
 }
 
 .panel-footer {
-    margin-top: auto;
+  margin-top: auto;
 }
-
 
 /* Main Content */
 .main-content {
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .main-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 1.5rem;
-    height: 60px;
-    background-color: #262a2e;
-    color: #fff;
-    flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.5rem;
+  height: 60px;
+  background-color: #262a2e;
+  color: #fff;
+  flex-shrink: 0;
 }
 
 .breadcrumbs {
-    display: flex;
-    align-items: center;
-    font-size: 1rem;
+  display: flex;
+  align-items: center;
+  font-size: 1rem;
 }
 
 .breadcrumbs .back-icon {
-    font-size: 1.5rem;
-    margin-right: 1rem;
-    cursor: pointer;
+  font-size: 1.5rem;
+  margin-right: 1rem;
+  cursor: pointer;
 }
 
 .breadcrumbs span {
-    cursor: pointer;
+  cursor: pointer;
 }
 .breadcrumbs span:hover {
-    color: #a0aec0;
+  color: #a0aec0;
 }
 
 .breadcrumbs span:last-child {
-    font-weight: 600;
-    color: #fff;
-    cursor: default;
+  font-weight: 600;
+  color: #fff;
+  cursor: default;
 }
 
 .main-nav {
-    display: flex;
-    gap: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
 .main-nav a {
-    color: #a0aec0;
-    text-decoration: none;
-    font-weight: 500;
-    padding: 0.5rem 0;
-    border-bottom: 2px solid transparent;
+  color: #a0aec0;
+  text-decoration: none;
+  font-weight: 500;
+  padding: 0.5rem 0;
+  border-bottom: 2px solid transparent;
 }
 
-.main-nav a.active, .main-nav a:hover {
-    color: #fff;
-    border-bottom-color: #4f46e5;
+.main-nav a.active,
+.main-nav a:hover {
+  color: #fff;
+  border-bottom-color: #4f46e5;
 }
 
 .header-actions {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
 
 .header-actions .ant-btn {
-    background: #3d4248;
-    border-color: #3d4248;
-    color: #fff;
+  background: #3d4248;
+  border-color: #3d4248;
+  color: #fff;
 }
 .header-actions .ant-btn:hover {
-    background: #4f46e5;
-    border-color: #4f46e5;
+  background: #4f46e5;
+  border-color: #4f46e5;
 }
 
 .map-container {
-    flex-grow: 1;
-    position: relative;
+  flex-grow: 1;
+  position: relative;
 }
 
 /* --- LEAFLET FIX --- */
 /* This class is added by <MapContainer> and needs width/height */
 .leaflet-map-container {
-    width: 100%;
-    height: 100%;
+  width: 100%;
+  height: 100%;
 }
