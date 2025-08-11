@@ -2,9 +2,11 @@ const ProjectDetail = require('../models/ProjectDetail');
 const Project = require('../models/Project'); // To check for project existence
 const turf = require('@turf/turf');
 
-// Helper to create a random polygon for new projects
-const createRandomPolygon = () => {
-  const center = [-74.0060, 40.7128]; // New York City center as an example
+// --- UPDATED HELPER ---
+// Helper now creates a polygon around a given center point
+const createRandomPolygon = (centerCoords) => {
+  // centerCoords should be [longitude, latitude]
+  const center = centerCoords;
   const radius = 0.1; // in kilometers
   const options = {
     num_vertices: 5,
@@ -23,7 +25,6 @@ exports.getOrCreateProjectDetails = async (req, res) => {
   try {
     const { projectId } = req.params;
 
-    // First, verify the project exists and belongs to the user
     const project = await Project.findOne({ _id: projectId, user: req.user.id });
     if (!project) {
       return res.status(404).json({ msg: 'Project not found or user not authorized' });
@@ -32,11 +33,13 @@ exports.getOrCreateProjectDetails = async (req, res) => {
     let details = await ProjectDetail.findOne({ project: projectId });
 
     if (!details) {
-      // If no details exist, create them with a default random flight path
+      // --- UPDATED TO USE PROJECT'S LOCATION ---
+      // If no details exist, create them using the parent project's location
+      const flightPathCenter = [project.longitude, project.latitude];
       details = new ProjectDetail({
         project: projectId,
         user: req.user.id,
-        flightPath: createRandomPolygon(),
+        flightPath: createRandomPolygon(flightPathCenter),
       });
       await details.save();
     }
@@ -56,19 +59,16 @@ exports.updateProjectDetails = async (req, res) => {
     const { projectId } = req.params;
     const updates = req.body;
 
-    // Find the details document linked to the project
     let details = await ProjectDetail.findOne({ project: projectId });
 
     if (!details) {
       return res.status(404).json({ msg: 'Project details not found.' });
     }
 
-    // Ensure the user owns these details
     if (details.user.toString() !== req.user.id) {
       return res.status(401).json({ msg: 'Not authorized' });
     }
 
-    // Update the document
     const updatedDetails = await ProjectDetail.findOneAndUpdate(
       { project: projectId },
       { $set: updates },

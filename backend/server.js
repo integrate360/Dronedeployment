@@ -21,6 +21,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/project-details', projectDetailRoutes); // <-- USE NEW ROUTES
+app.use('/api/geocode', require('./routes/geocodingRoutes'));
 
 
 // 2. Use the MONGO_URI from process.env

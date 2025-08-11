@@ -1,12 +1,12 @@
 // backend/controllers/projectController.js
 const Project = require('../models/Project');
+const ProjectDetail = require('../models/ProjectDetail'); // Import ProjectDetail for cascading delete
 
 // @desc    Get all projects for a logged-in user
 // @route   GET /api/projects
 // @access  Private
 exports.getProjects = async (req, res) => {
   try {
-    // req.user.id comes from the authMiddleware
     const projects = await Project.find({ user: req.user.id }).sort({ createdAt: -1 });
     res.status(200).json(projects);
   } catch (error) {
@@ -18,17 +18,20 @@ exports.getProjects = async (req, res) => {
 // @route   POST /api/projects
 // @access  Private
 exports.createProject = async (req, res) => {
-  const { name, thumbnail } = req.body;
+  // --- UPDATED ---
+  const { name, latitude, longitude } = req.body;
 
-  if (!name) {
-    return res.status(400).json({ msg: 'Project name is required' });
+  if (!name || latitude === undefined || longitude === undefined) {
+    return res.status(400).json({ msg: 'Project name and a selected location are required' });
   }
 
   try {
     const newProject = new Project({
       name,
-      thumbnail, // Will use default if not provided
+      latitude,
+      longitude,
       user: req.user.id,
+      // thumbnail will use default
     });
 
     const project = await newProject.save();
@@ -49,12 +52,14 @@ exports.updateProject = async (req, res) => {
       return res.status(404).json({ msg: 'Project not found' });
     }
 
-    // Ensure user owns the project
     if (project.user.toString() !== req.user.id) {
       return res.status(401).json({ msg: 'Not authorized' });
     }
 
-    project = await Project.findByIdAndUpdate(req.params.id, req.body, {
+    // For this implementation, we prevent changing the location after creation.
+    const { latitude, longitude, ...allowedUpdates } = req.body;
+
+    project = await Project.findByIdAndUpdate(req.params.id, allowedUpdates, {
       new: true,
       runValidators: true,
     });
@@ -76,11 +81,13 @@ exports.deleteProject = async (req, res) => {
       return res.status(404).json({ msg: 'Project not found' });
     }
 
-    // Ensure user owns the project
     if (project.user.toString() !== req.user.id) {
       return res.status(401).json({ msg: 'Not authorized' });
     }
 
+    // --- ADDED CASCADING DELETE ---
+    // Also delete associated project details to avoid orphaned documents
+    await ProjectDetail.findOneAndDelete({ project: req.params.id });
     await Project.findByIdAndDelete(req.params.id);
 
     res.status(200).json({ msg: 'Project removed' });

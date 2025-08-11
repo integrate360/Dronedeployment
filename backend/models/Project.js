@@ -17,6 +17,15 @@ const ProjectSchema = new mongoose.Schema({
     ref: 'User',
     required: true,
   },
+  // --- NEW FIELDS ---
+  latitude: {
+    type: Number,
+    required: [true, 'A location latitude is required.'],
+  },
+  longitude: {
+    type: Number,
+    required: [true, 'A location longitude is required.'],
+  }
 }, {
   timestamps: true // Automatically adds createdAt and updatedAt fields
 });

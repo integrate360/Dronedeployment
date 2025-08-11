@@ -1,21 +1,22 @@
-// frontend/src/components/ProjectsPage.jsx
+// frontend/src/pages/ProjectsPage.jsx
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiMenu, FiSearch, FiMap, FiBell, FiMoreVertical, FiFolder, FiGrid, FiList, FiPlus, FiEdit, FiTrash2, FiUploadCloud } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import api from '../apis/config';
 import AuthContext from '../contexts/AuthContext';
-import CreateProjectModal from './CreateProjectModal';
-import ActionModal from './ActionModal';
-import Sidebar from './Sidebar';
+import CreateProjectModal from '../components/CreateProjectModal';
+import ActionModal from '../components/ActionModal';
+import Sidebar from '../components/Sidebar';
 import '../styles/ProjectsPage.css';
 
-// ProjectCard now handles navigation and emits events to open the action modal
+// ProjectCard handles displaying a project and emitting events to open the action modal
 const ProjectCard = ({ project, isExample, onOpenModal, viewMode }) => {
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
   const optionsRef = useRef(null);
   const navigate = useNavigate();
 
+  // Close the options menu when clicking outside of it
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (optionsRef.current && !optionsRef.current.contains(event.target)) {
@@ -27,7 +28,7 @@ const ProjectCard = ({ project, isExample, onOpenModal, viewMode }) => {
   }, []);
 
   const handleAction = (actionType, event) => {
-    event.stopPropagation(); // Stop click from bubbling to the card
+    event.stopPropagation(); // Stop click from bubbling to the card's main click handler
     onOpenModal(actionType, project);
     setIsOptionsOpen(false);
   };
@@ -92,18 +93,24 @@ const ProjectsPage = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const { logout } = useContext(AuthContext);
 
+    // Static example projects
     const defaultProjects = [
         { _id: 'default1', name: 'Agriculture Example', thumbnail: 'https://images.unsplash.com/photo-1560493676-04071c5f467b?q=80&w=1974&auto=format&fit=crop', date: 'Track determination sample' },
         { _id: 'default3', name: 'Project Progress Example', thumbnail: 'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?q=80&w=2070&auto=format&fit=crop', date: 'Track progress over time' },
     ];
 
+    // Fetch user's projects on component mount
     useEffect(() => {
         const fetchProjects = async () => {
+            setLoading(true);
             try {
                 const response = await api.get('/projects');
                 setProjects(response.data);
-            } catch (error) { toast.error("Failed to fetch projects."); } 
-            finally { setLoading(false); }
+            } catch (error) { 
+                toast.error("Failed to fetch projects."); 
+            } finally { 
+                setLoading(false); 
+            }
         };
         fetchProjects();
     }, []);
@@ -116,13 +123,18 @@ const ProjectsPage = () => {
         setActionModalState({ isOpen: false, actionType: null, project: null });
     };
     
-    // CRUD Handlers
-    const handleCreateProject = async (name) => {
+    // --- CRUD HANDLERS ---
+
+    const handleCreateProject = async (projectData) => {
+        // projectData is an object: { name, latitude, longitude }
         try {
-            const response = await api.post('/projects', { name });
+            const response = await api.post('/projects', projectData);
             setProjects([response.data, ...projects]);
-            toast.success(`Project "${name}" created!`);
-        } catch (error) { toast.error("Failed to create project."); }
+            toast.success(`Project "${projectData.name}" created successfully!`);
+        } catch (error) { 
+            const errorMsg = error.response?.data?.msg || "Failed to create project.";
+            toast.error(errorMsg);
+        }
     };
 
     const handleDeleteProject = async (id) => {
@@ -130,8 +142,11 @@ const ProjectsPage = () => {
             await api.delete(`/projects/${id}`);
             setProjects(projects.filter(p => p._id !== id));
             toast.info("Project deleted.");
-        } catch (error) { toast.error("Failed to delete project."); }
-        finally { closeActionModal(); }
+        } catch (error) { 
+            toast.error("Failed to delete project."); 
+        } finally { 
+            closeActionModal(); 
+        }
     };
 
     const handleRenameProject = async (id, newName) => {
@@ -139,8 +154,11 @@ const ProjectsPage = () => {
             const response = await api.put(`/projects/${id}`, { name: newName });
             setProjects(projects.map(p => p._id === id ? response.data : p));
             toast.success("Project renamed.");
-        } catch (error) { toast.error("Failed to rename project."); }
-        finally { closeActionModal(); }
+        } catch (error) { 
+            toast.error("Failed to rename project."); 
+        } finally { 
+            closeActionModal(); 
+        }
     };
 
     const handleUploadThumbnail = async (id, base64Image) => {
@@ -148,8 +166,11 @@ const ProjectsPage = () => {
             const response = await api.put(`/projects/${id}`, { thumbnail: base64Image });
             setProjects(projects.map(p => p._id === id ? response.data : p));
             toast.success("Thumbnail updated!");
-        } catch (error) { toast.error("Failed to upload thumbnail."); }
-        finally { closeActionModal(); }
+        } catch (error) { 
+            toast.error("Failed to upload thumbnail."); 
+        } finally { 
+            closeActionModal(); 
+        }
     };
 
     const handleModalConfirm = (id, value) => {
@@ -165,7 +186,13 @@ const ProjectsPage = () => {
     return (
         <div className="projects-page-container">
             <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-            <CreateProjectModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} onCreate={handleCreateProject} />
+            
+            <CreateProjectModal 
+                isOpen={isCreateModalOpen} 
+                onClose={() => setIsCreateModalOpen(false)} 
+                onCreate={handleCreateProject} 
+            />
+            
             <ActionModal 
                 isOpen={actionModalState.isOpen}
                 onClose={closeActionModal}
@@ -211,7 +238,7 @@ const ProjectsPage = () => {
                     <p>Loading projects...</p>
                 ) : (
                     <div className={`projects-grid ${viewMode}`}>
-                        {displayedProjects.map(project => (
+                        {displayedProjects.length > 0 ? displayedProjects.map(project => (
                             <ProjectCard 
                                 key={project._id} 
                                 project={project}
@@ -219,7 +246,7 @@ const ProjectsPage = () => {
                                 onOpenModal={openActionModal}
                                 viewMode={viewMode}
                             />
-                        ))}
+                        )) : <p>No projects found. Click "New project" to get started!</p>}
                     </div>
                 )}
             </main>
