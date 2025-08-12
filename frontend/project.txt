@@ -1,0 +1,779 @@
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+} from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
+import { Switch, Slider, Button, Spin, Dropdown, Menu, Modal } from "antd";
+import {
+  FiMap,
+  FiMoreVertical,
+  FiEdit,
+  FiCopy,
+  FiTrash2,
+  FiPlus,
+  FiChevronRight,
+  FiHelpCircle,
+  FiInfo,
+  FiChevronLeft,
+  FiShare2,
+  FiUpload,
+  FiSettings,
+  FiBell,
+} from "react-icons/fi";
+import {
+  MdOutlineGpsFixed,
+  MdOutlineScreenshotMonitor,
+  MdVideocam,
+} from "react-icons/md";
+import {
+  FaPlane,
+  FaCube,
+  FaPhotoVideo,
+  FaSatelliteDish,
+  FaCloudDownloadAlt,
+  FaCloudUploadAlt,
+} from "react-icons/fa";
+import * as turf from "@turf/turf";
+import api from "../apis/config";
+
+// Leaflet and plugins
+import { MapContainer, TileLayer, FeatureGroup, Polygon } from "react-leaflet";
+import { EditControl } from "react-leaflet-draw";
+import L from "leaflet";
+import leafletImage from "leaflet-image";
+
+// Import Leaflet's CSS
+import "leaflet/dist/leaflet.css";
+import "leaflet-draw/dist/leaflet.draw.css";
+import "../styles/ProjectDetailPage.css";
+
+// Helper function to swap coordinates for Leaflet's [lat, lng] format
+const swapCoords = (coords) => {
+  return coords.map((ring) => ring.map((p) => [p[1], p[0]]));
+};
+
+// Fix for a known issue with leaflet-draw icons in Vite/React
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl:
+    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
+  iconUrl:
+    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
+  shadowUrl:
+    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
+});
+
+const ProjectDetailPage = () => {
+  const { projectId } = useParams();
+  const navigate = useNavigate();
+  const mapRef = useRef();
+  const featureGroupRef = useRef();
+
+  const [project, setProject] = useState(null);
+  const [missions, setMissions] = useState([]); // Holds an array of flight plans
+  const [activeMissionId, setActiveMissionId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [polygonKey, setPolygonKey] = useState(0);
+
+  const activeMission = useMemo(
+    () => missions.find((m) => m.id === activeMissionId),
+    [missions, activeMissionId]
+  );
+
+  // --- DATA FETCHING (with simulation) ---
+  useEffect(() => {
+    const fetchProjectData = async () => {
+      setLoading(true);
+      try {
+        const projectsResponse = await api.get("/projects");
+        const currentProject = projectsResponse.data.find(
+          (p) => p._id === projectId
+        );
+        setProject(currentProject);
+
+        // --- SIMULATED DATA FOR UI DEMO ---
+        // In a real app, you would fetch these missions from your backend
+        const mockMissions = [
+          {
+            id: "mission_1",
+            name: "Map Plan",
+            flightAltitude: 200,
+            enhanced3d: true,
+            liveMapHd: false,
+            rtkCoverage: true,
+            flightPath: null,
+          },
+          {
+            id: "mission_2",
+            name: "Map Plan 2",
+            flightAltitude: 250,
+            enhanced3d: false,
+            liveMapHd: true,
+            rtkCoverage: false,
+            flightPath: null,
+          },
+        ];
+        setMissions(mockMissions);
+        setActiveMissionId(mockMissions[0]?.id || null);
+        // --- END SIMULATION ---
+      } catch (error) {
+        toast.error("Failed to fetch project data.");
+        navigate("/projects");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProjectData();
+  }, [projectId, navigate]);
+  // ---
+
+  // --- HANDLERS ---
+  const handleMissionChange = (key, value) => {
+    setMissions((prevMissions) =>
+      prevMissions.map((m) =>
+        m.id === activeMissionId ? { ...m, [key]: value } : m
+      )
+    );
+  };
+
+  const handleAddMission = () => {
+    const newMission = {
+      id: `mission_${Date.now()}`,
+      name: `Map Plan ${missions.length + 1}`,
+      flightAltitude: 200,
+      enhanced3d: true,
+      liveMapHd: false,
+      rtkCoverage: false,
+      flightPath: null,
+    };
+    setMissions([...missions, newMission]);
+    setActiveMissionId(newMission.id);
+    toast.success(`'${newMission.name}' created!`);
+  };
+
+  const handleRenameMission = (missionId, currentName) => {
+    const newName = prompt("Enter new plan name:", currentName);
+    if (newName && newName !== currentName) {
+      setMissions(
+        missions.map((m) => (m.id === missionId ? { ...m, name: newName } : m))
+      );
+      toast.info("Plan renamed.");
+    }
+  };
+
+  const handleDeleteMission = (missionId) => {
+    if (missions.length <= 1) {
+      toast.error("You must have at least one flight plan.");
+      return;
+    }
+    Modal.confirm({
+      title: "Are you sure you want to delete this plan?",
+      content: "This action cannot be undone.",
+      okText: "Delete",
+      okType: "danger",
+      cancelText: "Cancel",
+      onOk: () => {
+        const newMissions = missions.filter((m) => m.id !== missionId);
+        setMissions(newMissions);
+        setActiveMissionId(newMissions[0].id);
+        toast.warn("Plan deleted.");
+      },
+    });
+  };
+
+  const calculatedStats = useMemo(() => {
+    if (!activeMission?.flightPath) {
+      return { minutes: "4:02", acres: 6, images: 112, battery: 1 };
+    }
+    const areaMeters = turf.area(activeMission.flightPath);
+    const acres = (areaMeters / 4046.86).toFixed(0);
+    const images = Math.round(acres * 18);
+    const totalSeconds = acres * 40;
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = Math.round(totalSeconds % 60)
+      .toString()
+      .padStart(2, "0");
+    const battery = Math.ceil((minutes + seconds / 60) / 20);
+    return { minutes: `${minutes}:${seconds}`, acres, images, battery };
+  }, [activeMission]);
+
+  // --- RENDER ---
+  if (loading || !activeMission) {
+    return (
+      <div className="loading-container">
+        <Spin size="large" />
+      </div>
+    );
+  }
+
+  const mapCenter = activeMission.flightPath
+    ? turf.center(activeMission.flightPath).geometry.coordinates.reverse()
+    : [19.7, 72.77];
+  const polygonPositions = activeMission.flightPath
+    ? swapCoords(activeMission.flightPath.coordinates)
+    : [];
+
+  const missionOptionsMenu = (
+    <Menu>
+      <Menu.Item
+        key="rename"
+        icon={<FiEdit />}
+        onClick={() =>
+          handleRenameMission(activeMission.id, activeMission.name)
+        }
+      >
+        Rename
+      </Menu.Item>
+      <Menu.Item key="duplicate" icon={<FiCopy />}>
+        Duplicate
+      </Menu.Item>
+      <Menu.Item key="photo_report" icon={<MdOutlineScreenshotMonitor />}>
+        Duplicate as Photo Report
+      </Menu.Item>
+      <Menu.Item key="video" icon={<MdVideocam />}>
+        Duplicate as Video
+      </Menu.Item>
+      <Menu.Divider />
+      <Menu.Item
+        key="delete"
+        icon={<FiTrash2 />}
+        danger
+        onClick={() => handleDeleteMission(activeMission.id)}
+      >
+        Delete
+      </Menu.Item>
+    </Menu>
+  );
+
+  return (
+    <div className="project-detail-container">
+      <header className="main-header">
+        <div className="breadcrumbs">
+          <FiChevronLeft
+            onClick={() => navigate("/projects")}
+            className="back-icon"
+          />
+          <span onClick={() => navigate("/projects")}>Home</span> /{" "}
+          <span>{project?.name || "Project"}</span>
+        </div>
+        <nav className="main-nav">
+          <a href="#fly" className="active">
+            Fly
+          </a>
+          <a href="#upload">Upload</a>
+          <a href="#explore">Explore</a>
+          <a href="#report">Report</a>
+        </nav>
+        <div className="header-actions">
+          <Button type="primary" icon={<FiShare2 />}>
+            Share
+          </Button>
+          <Button icon={<FiUpload />} />
+          <Button icon={<FiSettings />} />
+          <Button icon={<FiBell />} />
+        </div>
+      </header>
+
+      <div className="page-body-container">
+        <div className="left-panel">
+          <div className="panel-section capture-plan-section">
+            <p className="section-super-title">Capture Plan</p>
+            <div className="plan-selector-row">
+              <Dropdown
+                overlay={
+                  <Menu
+                    onClick={(e) => setActiveMissionId(e.key)}
+                    selectedKeys={[activeMissionId]}
+                  >
+                    {missions.map((mission) => (
+                      <Menu.Item key={mission.id} icon={<FiMap />}>
+                        {mission.name}
+                      </Menu.Item>
+                    ))}
+                  </Menu>
+                }
+                trigger={["click"]}
+              >
+                <Button className="plan-selector-btn">
+                  <FiMap />
+                  <span>{activeMission.name}</span>
+                </Button>
+              </Dropdown>
+              <Dropdown overlay={missionOptionsMenu} trigger={["click"]}>
+                <Button
+                  className="plan-actions-btn"
+                  icon={<FiMoreVertical />}
+                />
+              </Dropdown>
+              <Button
+                className="add-plan-btn"
+                type="primary"
+                shape="circle"
+                icon={<FiPlus />}
+                onClick={handleAddMission}
+              />
+            </div>
+          </div>
+
+          <div className="panel-section stats-grid">
+            <div>
+              <span>{calculatedStats.minutes}</span>
+              <p>Minutes</p>
+            </div>
+            <div>
+              <span>{calculatedStats.acres}</span>
+              <p>Acres</p>
+            </div>
+            <div>
+              <span>{calculatedStats.images}</span>
+              <p>Images</p>
+            </div>
+            <div>
+              <span>{calculatedStats.battery}</span>
+              <p>Battery</p>
+            </div>
+          </div>
+
+          <div className="panel-section">
+            <div className="section-title">
+              <FaPlane />
+              <h4>Flight Altitude</h4>
+            </div>
+            <p className="section-sub-text">Travel Altitude: 210 ft</p>
+            <div className="altitude-control">
+              <Button shape="circle" icon={<MdOutlineGpsFixed />} />
+              <input
+                type="number"
+                value={activeMission.flightAltitude}
+                onChange={(e) =>
+                  handleMissionChange(
+                    "flightAltitude",
+                    parseInt(e.target.value) || 0
+                  )
+                }
+              />
+              <span>ft</span>
+            </div>
+          </div>
+
+          <div className="panel-section toggle-section">
+            <div className="section-title">
+              <FaCube />
+              <h4 className="icon-title">Enhanced 3D</h4>
+              <FiInfo />
+            </div>
+            <Switch
+              checked={activeMission.enhanced3d}
+              onChange={(val) => handleMissionChange("enhanced3d", val)}
+            />
+          </div>
+          <div className="panel-section toggle-section">
+            <div className="section-title">
+              <FaPhotoVideo />
+              <h4 className="icon-title">Live Map HD</h4>
+              <FiInfo />
+            </div>
+            <Switch
+              checked={activeMission.liveMapHd}
+              onChange={(val) => handleMissionChange("liveMapHd", val)}
+            />
+          </div>
+          <div className="panel-section link-section">
+            <div className="section-title">
+              <FiSettings />
+              <h4 className="icon-title">Advanced</h4>
+            </div>
+            <FiChevronRight />
+          </div>
+          <div className="panel-section toggle-section no-border">
+            <div className="section-title">
+              <FaSatelliteDish />
+              <h4 className="icon-title">RTK Coverage</h4>
+              <FiInfo />
+            </div>
+            <div
+              className={`rtk-status ${
+                activeMission.rtkCoverage ? "active" : ""
+              }`}
+            ></div>
+          </div>
+          <div className="panel-section button-section">
+            <div className="section-title">
+              <FaCloudDownloadAlt />
+              <h4 className="icon-title">Data On Demand</h4>
+              <FiInfo />
+            </div>
+            <Button>Request</Button>
+          </div>
+          <div className="panel-section button-section">
+            <div className="section-title">
+              <FaCloudUploadAlt />
+              <h4 className="icon-title">Import Flight Path</h4>
+              <FiInfo />
+            </div>
+            <Button>Import</Button>
+          </div>
+
+          <div className="panel-footer">
+            <p>
+              Don't own a drone? <a href="#simulator">Test the simulator</a>
+            </p>
+            <Button type="text" icon={<FiHelpCircle />}>
+              Help
+            </Button>
+          </div>
+        </div>
+
+        <div className="main-content">
+          <div className="map-container">
+            <MapContainer
+              key={polygonKey}
+              center={mapCenter}
+              zoom={16}
+              scrollWheelZoom={true}
+              className="leaflet-map-container"
+              ref={mapRef}
+            >
+              <TileLayer
+                attribution='&copy; <a href="https://www.esri.com/en-us/home">Esri</a> &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              />
+              {/* FeatureGroup and EditControl would be placed here to draw on the map */}
+            </MapContainer>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ProjectDetailPage;
+
+
+
+/* frontend/src/styles/ProjectDetailPage.css */
+
+/* --- (Existing .project-detail-container, .loading-container, .page-body-container styles) --- */
+.project-detail-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  background-color: #f0f2f5;
+  color: #333;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+}
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  width: 100vw;
+}
+.page-body-container {
+  display: flex;
+  flex-grow: 1;
+  overflow: hidden;
+}
+
+/* --- Left Panel UPDATED --- */
+.left-panel {
+  width: 360px; /* Slightly wider to accommodate new elements */
+  flex-shrink: 0;
+  background-color: #ffffff;
+  border-right: 1px solid #e8e8e8;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+.panel-section {
+  padding: 1rem 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+.panel-section:last-of-type {
+  border-bottom: none;
+}
+
+.section-super-title {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-bottom: 0.5rem;
+}
+
+/* Capture Plan Section */
+.plan-selector-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.plan-selector-btn {
+  flex-grow: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+  height: 40px;
+  font-size: 1rem;
+}
+.plan-selector-btn span {
+  flex-grow: 1;
+  margin-left: 8px;
+}
+.plan-actions-btn,
+.add-plan-btn {
+  height: 40px;
+  width: 40px;
+}
+.add-plan-btn {
+  font-size: 1.2rem;
+}
+
+/* Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  text-align: center;
+}
+.stats-grid div span {
+  font-size: 1.5rem;
+  font-weight: 500;
+}
+.stats-grid div p {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+/* Flight Altitude Section */
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 1.2rem;
+  color: #374151;
+}
+.section-title h4 {
+  font-size: 1rem;
+  font-weight: 500;
+  margin: 0;
+}
+.section-title .icon-title {
+  margin-left: 0; /* Override default h4 margin */
+}
+.section-title .anticon,
+.section-title svg {
+  font-size: 1.1rem;
+  color: #4b5563;
+}
+.section-sub-text {
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin-left: 28px;
+  margin-bottom: 12px;
+}
+.altitude-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 4px;
+}
+.altitude-control .ant-btn {
+  border: none;
+}
+.altitude-control input {
+  flex-grow: 1;
+  border: none;
+  outline: none;
+  font-size: 1rem;
+  font-weight: 500;
+  text-align: right;
+  padding-right: 4px;
+  width: 50px;
+}
+.altitude-control span {
+  font-size: 1rem;
+  color: #6b7280;
+}
+/* Chrome, Safari, Edge, Opera */
+.altitude-control input::-webkit-outer-spin-button,
+.altitude-control input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+/* Firefox */
+.altitude-control input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Toggle & Link Sections */
+.toggle-section,
+.link-section,
+.button-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.link-section,
+.button-section .section-title {
+  margin-bottom: 0;
+}
+.link-section svg {
+  font-size: 1.2rem;
+  color: #9ca3af;
+}
+.toggle-section .section-title svg:last-of-type {
+  color: #9ca3af;
+  cursor: help;
+}
+.toggle-section.no-border {
+  border-bottom: none;
+}
+.rtk-status {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: #d1d5db; /* Inactive */
+}
+.rtk-status.active {
+  background-color: #22c55e; /* Active Green */
+}
+
+/* Button Section */
+.button-section .ant-btn {
+  border-color: #d1d5db;
+}
+
+/* Panel Footer */
+.panel-footer {
+  margin-top: auto;
+  text-align: center;
+  padding-top: 1rem;
+}
+.panel-footer p {
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+.panel-footer a {
+  color: #4f46e5;
+  font-weight: 500;
+  text-decoration: none;
+}
+.panel-footer .ant-btn {
+  color: #6b7280;
+}
+
+/* --- (Existing Main Content, Header, Map Container, and Leaflet Fix styles) --- */
+.main-content {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}
+.main-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 64px;
+  background-color: #1f2937;
+  color: #d1d5db;
+  flex-shrink: 0;
+  width: 100%;
+}
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.1rem;
+}
+.breadcrumbs .back-icon {
+  font-size: 1.8rem;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: color 0.2s;
+  margin-right: 8px;
+}
+.breadcrumbs .back-icon:hover {
+  color: #fff;
+}
+.breadcrumbs span {
+  color: #9ca3af;
+  cursor: pointer;
+}
+.breadcrumbs span:hover {
+  color: #fff;
+}
+.breadcrumbs span:last-child {
+  font-weight: 500;
+  color: #fff;
+  cursor: default;
+}
+.main-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+  height: 100%;
+}
+.main-nav a {
+  color: #9ca3af;
+  text-decoration: none;
+  font-weight: 500;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s ease-in-out;
+}
+.main-nav a.active,
+.main-nav a:hover {
+  color: #fff;
+}
+.main-nav a.active {
+  border-bottom-color: #4f46e5;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.header-actions .ant-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #374151;
+  border-color: #4b5563;
+  color: #d1d5db;
+}
+.header-actions .ant-btn:hover {
+  border-color: #6366f1;
+  color: #fff;
+}
+.header-actions .ant-btn-primary {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #fff;
+}
+.header-actions .ant-btn-primary:hover {
+  background: #4338ca;
+  border-color: #4338ca;
+}
+.map-container {
+  flex-grow: 1;
+  position: relative;
+}
+.leaflet-map-container {
+  width: 100%;
+  height: 100%;
+}

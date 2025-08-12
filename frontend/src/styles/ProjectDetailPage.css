@@ -1,7 +1,9 @@
 /* frontend/src/styles/ProjectDetailPage.css */
 
+/* Main container is now a column to stack header on top of body */
 .project-detail-container {
   display: flex;
+  flex-direction: column; /* Lays out header and body vertically */
   height: 100vh;
   width: 100vw;
   background-color: #f0f2f5;
@@ -18,7 +20,14 @@
   width: 100vw;
 }
 
-/* Left Panel */
+/* NEW: This wrapper holds the sidebar and map content side-by-side */
+.page-body-container {
+  display: flex;
+  flex-grow: 1; /* Takes up all available vertical space below the header */
+  overflow: hidden; /* Prevents double scrollbars */
+}
+
+/* Left Panel (Sidebar) */
 .left-panel {
   width: 320px;
   flex-shrink: 0;
@@ -27,6 +36,7 @@
   display: flex;
   flex-direction: column;
   padding: 1.5rem;
+  overflow-y: auto; /* Add scroll if content is too long */
 }
 
 .panel-header {
@@ -44,7 +54,7 @@
 
 .stats-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr 1fr; /* Changed to 4 columns */
   gap: 1rem;
   margin-bottom: 2rem;
   text-align: center;
@@ -52,12 +62,12 @@
 
 .stats-grid div span {
   font-size: 1.5rem;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .stats-grid div p {
   font-size: 0.8rem;
-  color: #888;
+  color: #6b7280;
   margin: 0;
 }
 
@@ -93,83 +103,115 @@
   margin-top: auto;
 }
 
-/* Main Content */
+/* Main Content (Map Area) */
+/* No longer has a header inside it */
 .main-content {
   flex-grow: 1;
   display: flex;
   flex-direction: column;
 }
 
+/* Header (Full Width) - UPDATED TO MATCH SCREENSHOT */
 .main-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 1.5rem;
-  height: 60px;
-  background-color: #262a2e;
-  color: #fff;
-  flex-shrink: 0;
+  padding: 0 24px;
+  height: 64px;
+  background-color: #1f2937;
+  color: #d1d5db;
+  flex-shrink: 0; /* Prevents the header from shrinking */
+  width: 100%;
+  border-bottom: 1px solid #374151;
 }
 
 .breadcrumbs {
   display: flex;
   align-items: center;
-  font-size: 1rem;
+  gap: 8px;
+  font-size: 1.1rem;
 }
 
 .breadcrumbs .back-icon {
-  font-size: 1.5rem;
-  margin-right: 1rem;
+  font-size: 1.8rem;
+  color: #9ca3af;
   cursor: pointer;
+  transition: color 0.2s;
+  margin-right: 8px;
+}
+.breadcrumbs .back-icon:hover {
+  color: #fff;
 }
 
 .breadcrumbs span {
+  color: #9ca3af;
   cursor: pointer;
 }
 .breadcrumbs span:hover {
-  color: #a0aec0;
+  color: #fff;
 }
 
 .breadcrumbs span:last-child {
-  font-weight: 600;
+  font-weight: 500;
   color: #fff;
   cursor: default;
 }
 
 .main-nav {
   display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+  height: 100%;
 }
 
 .main-nav a {
-  color: #a0aec0;
+  color: #9ca3af;
   text-decoration: none;
   font-weight: 500;
-  padding: 0.5rem 0;
-  border-bottom: 2px solid transparent;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s ease-in-out;
 }
 
 .main-nav a.active,
 .main-nav a:hover {
   color: #fff;
+}
+
+.main-nav a.active {
   border-bottom-color: #4f46e5;
 }
 
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 12px;
 }
 
 .header-actions .ant-btn {
-  background: #3d4248;
-  border-color: #3d4248;
-  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #374151;
+  border-color: #4b5563;
+  color: #d1d5db;
 }
 .header-actions .ant-btn:hover {
+  border-color: #6366f1;
+  color: #fff;
+}
+
+.header-actions .ant-btn-primary {
   background: #4f46e5;
   border-color: #4f46e5;
+  color: #fff;
+}
+.header-actions .ant-btn-primary:hover {
+  background: #4338ca;
+  border-color: #4338ca;
 }
 
 .map-container {
@@ -178,7 +220,371 @@
 }
 
 /* --- LEAFLET FIX --- */
-/* This class is added by <MapContainer> and needs width/height */
+.leaflet-map-container {
+  width: 100%;
+  height: 100%;
+}
+/* frontend/src/styles/ProjectDetailPage.css */
+
+/* --- Main Layout --- */
+.project-detail-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  background-color: #f0f2f5;
+  color: #333;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+}
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  width: 100vw;
+}
+.page-body-container {
+  display: flex;
+  flex-grow: 1;
+  overflow: hidden;
+}
+
+/* --- Full Width Header --- */
+.main-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 64px;
+  background-color: #1f2937;
+  color: #d1d5db;
+  flex-shrink: 0;
+  width: 100%;
+}
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.1rem;
+}
+.breadcrumbs .back-icon {
+  font-size: 1.8rem;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: color 0.2s;
+  margin-right: 8px;
+}
+.breadcrumbs span {
+  color: #9ca3af;
+  cursor: pointer;
+}
+.breadcrumbs span:hover,
+.breadcrumbs .back-icon:hover {
+  color: #fff;
+}
+.breadcrumbs span:last-child {
+  font-weight: 500;
+  color: #fff;
+  cursor: default;
+}
+.main-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+  height: 100%;
+}
+.main-nav a {
+  color: #9ca3af;
+  text-decoration: none;
+  font-weight: 500;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s ease-in-out;
+}
+.main-nav a.active,
+.main-nav a:hover {
+  color: #fff;
+}
+.main-nav a.active {
+  border-bottom-color: #4f46e5;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.header-actions .ant-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #374151;
+  border-color: #4b5563;
+  color: #d1d5db;
+}
+.header-actions .ant-btn:hover {
+  border-color: #6366f1;
+  color: #fff;
+}
+.header-actions .ant-btn-primary {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #fff;
+}
+.header-actions .ant-btn-primary:hover {
+  background: #4338ca;
+  border-color: #4338ca;
+}
+
+/* --- Left Panel (Sidebar) --- */
+.left-panel {
+  width: 360px;
+  flex-shrink: 0;
+  background-color: #ffffff;
+  border-right: 1px solid #e8e8e8;
+  display: flex;
+  flex-direction: column;
+  padding: 0 1.5rem;
+  overflow-y: auto;
+}
+
+.panel-section {
+  padding: 1rem 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+.panel-section:last-of-type,
+.toggle-section.no-border {
+  border-bottom: none;
+}
+
+.section-super-title {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-bottom: 0.5rem;
+  padding-top: 1rem;
+}
+
+/* Capture Plan Section */
+.plan-selector-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.plan-selector-btn {
+  flex-grow: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+  height: 40px;
+  font-size: 1rem;
+  font-weight: 500;
+  padding: 0 12px;
+}
+.plan-selector-btn span {
+  flex-grow: 1;
+  margin-left: 8px;
+}
+.plan-actions-btn,
+.add-plan-btn {
+  height: 40px;
+  width: 40px;
+}
+.add-plan-btn {
+  font-size: 1.2rem;
+}
+
+/* Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  text-align: center;
+}
+.stats-grid div span {
+  font-size: 1.5rem;
+  font-weight: 500;
+}
+.stats-grid div p {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+/* Common Section Styles */
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 1.2rem;
+  color: #374151;
+}
+.section-title h4 {
+  font-size: 1rem;
+  font-weight: 500;
+  margin: 0;
+}
+.section-title .icon-title {
+  margin-left: 0;
+}
+.section-title svg {
+  font-size: 1.1rem;
+  color: #4b5563;
+}
+.section-sub-text {
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin-left: 30px;
+  margin-top: -5px;
+  margin-bottom: 12px;
+}
+.section-sub-text.full {
+  margin-left: 0;
+  line-height: 1.4;
+}
+
+.altitude-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 4px;
+}
+.altitude-control .ant-btn {
+  border: none;
+}
+.altitude-control input {
+  flex-grow: 1;
+  border: none;
+  outline: none;
+  font-size: 1rem;
+  font-weight: 500;
+  text-align: right;
+  padding-right: 4px;
+  width: 50px;
+}
+.altitude-control span {
+  font-size: 1rem;
+  color: #6b7280;
+  padding-right: 4px;
+}
+.altitude-control input::-webkit-outer-spin-button,
+.altitude-control input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.altitude-control input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Toggle, Link, Button Sections */
+.toggle-section,
+.link-section,
+.button-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.toggle-section.large h4 {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+.link-section,
+.button-section .section-title {
+  margin-bottom: 0;
+}
+.link-section {
+  cursor: pointer;
+}
+.link-section svg:last-of-type {
+  font-size: 1.2rem;
+  color: #9ca3af;
+}
+.toggle-section .section-title svg:last-of-type {
+  color: #9ca3af;
+  cursor: help;
+  font-size: 1rem;
+  margin-left: 4px;
+}
+.rtk-status {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: #d1d5db;
+}
+.rtk-status.active {
+  background-color: #22c55e;
+}
+.button-section .ant-btn {
+  border-color: #d1d5db;
+}
+
+/* Panel Footer */
+.panel-footer {
+  margin-top: auto;
+  padding: 1rem 0;
+  text-align: center;
+}
+.panel-footer p {
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+.panel-footer a {
+  color: #4f46e5;
+  font-weight: 500;
+  text-decoration: none;
+}
+.panel-footer .ant-btn {
+  color: #6b7280;
+}
+
+/* --- Advanced Settings Panel --- */
+.advanced-settings-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.advanced-settings-header {
+  display: flex;
+  align-items: center;
+  padding: 1rem 0;
+  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 1rem;
+  flex-shrink: 0;
+}
+.advanced-settings-header .back-btn {
+  font-size: 1.5rem;
+  color: #333;
+  margin-right: 1rem;
+}
+.advanced-settings-header h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+}
+/* Style AntD select dropdown */
+.advanced-settings-panel .ant-select-selector {
+  height: 40px !important;
+  padding: 0 11px !important;
+  display: flex;
+  align-items: center;
+}
+
+/* Main Content Area */
+.main-content {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.map-container {
+  flex-grow: 1;
+}
 .leaflet-map-container {
   width: 100%;
   height: 100%;
