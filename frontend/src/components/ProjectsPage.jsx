@@ -225,7 +225,6 @@ const ProjectsPage = () => {
                         <button className={`tab-btn ${activeTab === 'myProjects' ? 'active' : ''}`} onClick={() => setActiveTab('myProjects')}>My projects</button>
                     </div>
                     <div className="actions">
-                        <button className="action-btn new-folder-btn"><FiFolder /> New folder</button>
                         <button className="action-btn new-project-btn" onClick={() => setIsCreateModalOpen(true)}><FiPlus /> New project</button>
                         <div className="view-toggle">
                             <button className={`icon-btn ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => setViewMode('grid')}><FiGrid /></button>

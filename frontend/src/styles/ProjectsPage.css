@@ -366,3 +366,75 @@
 .project-card.list .card-main-info {
   flex-grow: 1;
 }
+
+/* Add these styles to the END of frontend/src/styles/ProjectDetailPage.css */
+
+/* --- Drawing Controls --- */
+.drawing-controls {
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 1.5rem; /* Add some spacing at the bottom */
+}
+
+.drawing-controls .section-title {
+  margin-bottom: 0.25rem;
+}
+
+.drawing-controls .section-sub-text {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.drawing-buttons {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.drawing-buttons .ant-btn {
+  flex-grow: 1;
+}
+
+/* --- Map Vertex Markers --- */
+.vertex-point-start {
+  cursor: pointer !important; /* Make it obvious the first point is clickable to finish */
+}
+
+/* Add this to the end of frontend/src/styles/ProjectDetailPage.css */
+
+.slider {
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  background: #ddd;
+  outline: none;
+  opacity: 0.7;
+  -webkit-transition: .2s;
+  transition: opacity .2s;
+  border-radius: 5px;
+}
+
+.slider:hover {
+  opacity: 1;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background: var(--primary-blue);
+  cursor: pointer;
+  border-radius: 50%;
+}
+
+.slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background: var(--primary-blue);
+  cursor: pointer;
+  border-radius: 50%;
+}

@@ -1,5 +1,5 @@
-// frontend/src/components/Sidebar.jsx
 import React, { useContext } from 'react';
+// MODIFICATION: Removed FiSave
 import { FiX, FiBriefcase, FiMap, FiLink, FiZap, FiSettings, FiHelpCircle, FiLogOut } from 'react-icons/fi';
 import AuthContext from '../contexts/AuthContext';
 import '../styles/Sidebar.css';
@@ -20,6 +20,8 @@ const Sidebar = ({ isOpen, onClose }) => {
     { icon: <FiLogOut />, text: 'Log out', action: logout },
   ];
 
+  // MODIFICATION: Removed the handleSaveClick function
+  
   return (
     <>
       <div className={`sidebar-overlay ${isOpen ? 'show' : ''}`} onClick={onClose}></div>
@@ -38,6 +40,7 @@ const Sidebar = ({ isOpen, onClose }) => {
           </nav>
         </div>
         <div className="sidebar-footer">
+          {/* --- MODIFICATION: REMOVED THE SAVE BUTTON ELEMENT FROM HERE --- */}
           <nav>
             {bottomItems.map((item, index) => (
               <a href="#" key={index} className="nav-item" onClick={item.action}>
