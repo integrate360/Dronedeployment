@@ -2,20 +2,20 @@ const ProjectDetail = require('../models/ProjectDetail');
 const Project = require('../models/Project'); // To check for project existence
 const turf = require('@turf/turf');
 
-// --- UPDATED HELPER ---
-// Helper now creates a polygon around a given center point
-const createRandomPolygon = (centerCoords) => {
-  // centerCoords should be [longitude, latitude]
-  const center = centerCoords;
-  const radius = 0.1; // in kilometers
-  const options = {
-    num_vertices: 5,
-    max_radial_length: 0.05,
-    bbox: [center[0] - radius, center[1] - radius, center[0] + radius, center[1] + radius],
-  };
-  // Turf.js randomPolygon returns a FeatureCollection
-  const randomPolygonFeature = turf.randomPolygon(1, options).features[0];
-  return randomPolygonFeature.geometry; // Return just the Geometry object
+// --- MODIFICATION: Replaced random polygon with a default square ---
+/**
+ * Creates a square GeoJSON polygon geometry around a center point.
+ * @param {Array<number>} centerCoords - The center coordinates as [longitude, latitude].
+ * @returns {object} A GeoJSON Polygon geometry object.
+ */
+const createDefaultSquare = (centerCoords) => {
+  const center = turf.point(centerCoords);
+  // Create a 200m x 200m bounding box (100m radius from center)
+  const buffered = turf.buffer(center, 0.1, { units: 'kilometers' });
+  const bbox = turf.bbox(buffered);
+  const squarePolygon = turf.bboxPolygon(bbox);
+  
+  return squarePolygon.geometry; // Return just the Geometry object
 };
 
 // @desc    Get or create project details for a specific project
@@ -33,13 +33,12 @@ exports.getOrCreateProjectDetails = async (req, res) => {
     let details = await ProjectDetail.findOne({ project: projectId });
 
     if (!details) {
-      // --- UPDATED TO USE PROJECT'S LOCATION ---
-      // If no details exist, create them using the parent project's location
       const flightPathCenter = [project.longitude, project.latitude];
       details = new ProjectDetail({
         project: projectId,
         user: req.user.id,
-        flightPath: createRandomPolygon(flightPathCenter),
+        // --- MODIFICATION: Call the new function to create a square ---
+        flightPath: createDefaultSquare(flightPathCenter),
       });
       await details.save();
     }
@@ -59,25 +58,41 @@ exports.updateProjectDetails = async (req, res) => {
     const { projectId } = req.params;
     const updates = req.body;
 
-    let details = await ProjectDetail.findOne({ project: projectId });
+    let updateOperation = {};
+    const otherUpdates = { ...updates };
 
-    if (!details) {
-      return res.status(404).json({ msg: 'Project details not found.' });
+    delete otherUpdates.flightPath;
+    
+    if (Object.keys(otherUpdates).length > 0) {
+      updateOperation.$set = otherUpdates;
     }
 
-    if (details.user.toString() !== req.user.id) {
-      return res.status(401).json({ msg: 'Not authorized' });
+    if (updates.flightPath === null) {
+      updateOperation.$unset = { flightPath: "" };
+    } else if (updates.flightPath) {
+      if (!updateOperation.$set) updateOperation.$set = {};
+      updateOperation.$set.flightPath = updates.flightPath;
+    }
+    
+    const details = await ProjectDetail.findOne({ project: projectId, user: req.user.id });
+
+    if (!details) {
+      return res.status(404).json({ msg: 'Project details not found or user not authorized.' });
     }
 
     const updatedDetails = await ProjectDetail.findOneAndUpdate(
       { project: projectId },
-      { $set: updates },
+      updateOperation,
       { new: true, runValidators: true }
     );
 
     res.status(200).json(updatedDetails);
+
   } catch (error) {
-    console.error('Error in updateProjectDetails:', error);
+    console.error('Error in updateProjectDetails:', error.message);
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ msg: `Validation Error: ${error.message}` });
+    }
     res.status(500).json({ msg: 'Server Error' });
   }
 };

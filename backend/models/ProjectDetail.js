@@ -6,7 +6,7 @@ const ProjectDetailSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Project',
     required: true,
-    unique: true, // Each project has only one detail document
+    unique: true,
   },
   user: {
     type: mongoose.Schema.Types.ObjectId,
@@ -29,17 +29,19 @@ const ProjectDetailSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
-  // Using GeoJSON format for the flight path polygon
   flightPath: {
     type: {
       type: String,
       enum: ['Polygon'],
-      required: true,
     },
     coordinates: {
-      type: [[[Number]]], // Array of linear rings (arrays of points)
-      required: true,
+      type: [[[Number]]],
     },
+  },
+  // --- MODIFICATION: Add field to store grid angle ---
+  flightPathAngle: {
+    type: Number,
+    default: 0,
   },
 }, {
   timestamps: true,
