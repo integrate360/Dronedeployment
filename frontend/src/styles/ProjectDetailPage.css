@@ -643,3 +643,40 @@
 .leaflet-marker-dragging .draggable-vertex {
   cursor: grabbing;
 }
+/* Add these styles to your existing ProjectDetailPage.css */
+
+.polygon-handle {
+  background-color: rgba(255, 255, 255, 0.9);
+  border: 2px solid #007cbf;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+}
+
+.polygon-handle:active {
+  cursor: grabbing;
+}
+
+.vertex-action-icon {
+  background-color: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+/* Add these styles for the new edge handles */
+.edge-handle .edge-handle-icon {
+    background: #ffffff;
+    border: 2px solid #007cbf;
+    border-radius: 50%;
+    box-shadow: 0 0 5px rgba(0,0,0,0.5);
+}
+
+.edge-handle {
+    cursor: move !important;
+}
