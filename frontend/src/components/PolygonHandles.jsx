@@ -90,42 +90,52 @@ const PolygonHandles = ({ vertices, onMove, onRotate, onDragStart, onDragEnd }) 
     onMove(rotatedVertices);
   }
 
+  // --- REFINED IMPLEMENTATION: Manual logic for edge dragging (resizing) ---
   const handleEdgeDrag = (e, index1, index2) => {
     if (!dragStartRef.current) return;
     
     const { initialVertices } = dragStartRef.current;
     
+    // 1. Get the original vertices of the edge from the stored state
     const v1 = initialVertices[index1];
     const v2 = initialVertices[index2];
     
     const p1 = turf.point([v1[1], v1[0]]);
     const p2 = turf.point([v2[1], v2[0]]);
     
+    // 2. Calculate the normal (perpendicular) direction of the edge. This is the axis of movement.
     const bearing = turf.bearing(p1, p2);
-    const normalBearing = bearing + 90;
+    const normalBearing = bearing + 90; // The direction to push/pull the edge
     
     const currentPointTurf = turf.point([e.latlng.lng, e.latlng.lat]);
     
+    // 3. To constrain movement, create an infinite line along the normal that passes through the edge's midpoint.
     const midPoint = turf.midpoint(p1, p2);
-    const normalLineP1 = turf.destination(midPoint, 1, normalBearing, { units: 'kilometers' });
-    const normalLineP2 = turf.destination(midPoint, 1, normalBearing - 180, { units: 'kilometers' });
+    const normalLineP1 = turf.destination(midPoint, 10, normalBearing, { units: 'kilometers' }); // A point far away
+    const normalLineP2 = turf.destination(midPoint, 10, normalBearing - 180, { units: 'kilometers' }); // A point far away in the opposite direction
     const infiniteNormalLine = turf.lineString([normalLineP1.geometry.coordinates, normalLineP2.geometry.coordinates]);
     
+    // 4. Find the closest point on the normal line to the current mouse position. This forces the drag to be perpendicular.
     const snappedCurrent = turf.nearestPointOnLine(infiniteNormalLine, currentPointTurf);
     
+    // 5. Calculate the distance to move. This is the distance from the original midpoint to the snapped mouse position.
     const dragDistance = turf.distance(midPoint, snappedCurrent, { units: 'kilometers' });
     
     if (dragDistance === 0) return;
 
+    // 6. Determine the direction (inward vs. outward).
     const dragBearing = turf.bearing(midPoint, snappedCurrent);
     const bearingDiff = Math.abs(dragBearing - normalBearing);
+    // If the drag bearing is almost the same as the normal, it's outward (1). Otherwise, it's inward (-1).
     const direction = (bearingDiff < 1 || bearingDiff > 359) ? 1 : -1;
     
     const moveDistance = dragDistance * direction;
     
+    // 7. Move the two original vertices by the calculated distance along the normal.
     const newP1 = turf.destination(p1, moveDistance, normalBearing, { units: 'kilometers' });
     const newP2 = turf.destination(p2, moveDistance, normalBearing, { units: 'kilometers' });
     
+    // 8. Create the new set of vertices for the entire polygon.
     const newVertices = [...initialVertices];
     newVertices[index1] = [newP1.geometry.coordinates[1], newP1.geometry.coordinates[0]];
     newVertices[index2] = [newP2.geometry.coordinates[1], newP2.geometry.coordinates[0]];
@@ -148,7 +158,7 @@ const PolygonHandles = ({ vertices, onMove, onRotate, onDragStart, onDragEnd }) 
           dragstart: (e) => {
             dragStartRef.current = {
               startPos: e.target.getLatLng(),
-              initialVertices: vertices,
+              initialVertices: vertices, // Store original vertices
             };
           },
           drag: (e) => {
@@ -180,7 +190,7 @@ const PolygonHandles = ({ vertices, onMove, onRotate, onDragStart, onDragEnd }) 
           dragstart: () => {
             dragStartRef.current = {
               initialCenterPoint: turf.point([center.lng, center.lat]),
-              initialVertices: vertices,
+              initialVertices: vertices, // Store original vertices
             };
           },
           drag: handleRotate,
@@ -190,7 +200,7 @@ const PolygonHandles = ({ vertices, onMove, onRotate, onDragStart, onDragEnd }) 
           },
         }}
       />
-      {/* --- Edge Handles for Stretching --- */}
+      {/* --- Edge Handles for Resizing (Stretching) --- */}
       {edges.map((edge, index) => (
         <Marker
           key={`edge-${index}`}
@@ -203,6 +213,7 @@ const PolygonHandles = ({ vertices, onMove, onRotate, onDragStart, onDragEnd }) 
               onDragStart();
             },
             dragstart: () => {
+              // Store a clean copy of the vertices at the moment the drag begins.
               dragStartRef.current = {
                 initialVertices: [...vertices],
               };
@@ -210,7 +221,7 @@ const PolygonHandles = ({ vertices, onMove, onRotate, onDragStart, onDragEnd }) 
             drag: (e) => handleEdgeDrag(e, edge.v1_index, edge.v2_index),
             dragend: () => {
               onDragEnd();
-              dragStartRef.current = null;
+              dragStartRef.current = null; // Clear the state
             },
           }}
         />
