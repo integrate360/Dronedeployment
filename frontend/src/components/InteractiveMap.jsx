@@ -1,5 +1,5 @@
 // frontend/src/components/InteractiveMap.jsx
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo, useRef, useCallback, useEffect } from 'react'; // --- MODIFIED: Imported useEffect
 import {
   MapContainer,
   TileLayer,
@@ -7,49 +7,51 @@ import {
   Marker,
   Tooltip,
   LayersControl,
-  CircleMarker,
 } from 'react-leaflet';
 import L from 'leaflet';
-import * as turf from '@turf/turf';
 import { toast } from 'react-toastify';
 
 import FlightGrid from './FlightGrid';
 import PolygonHandles from './PolygonHandles';
 
+// Helper function to create the custom icon for the midpoint handles
+const createMidpointIcon = () => {
+  const iconHtml = `<div class="midpoint-handle-icon"></div>`;
+  return L.divIcon({
+    html: iconHtml,
+    className: 'midpoint-handle',
+    iconSize: [16, 16],
+    iconAnchor: [8, 8],
+  });
+};
+const midpointIcon = createMidpointIcon();
+
 const InteractiveMap = ({
   project,
   vertices,
   flightAngle,
+  isInteracting,
   onVerticesChange,
-  onInteraction,
-  onFlightAngleChange, // This prop seems unused but kept for interface consistency
+  onInteractionStart,
+  onInteractionEnd,
   whenCreated,
 }) => {
   const mapRef = useRef(null);
 
-  const handleDragStart = () => mapRef.current?.dragging.disable();
-  const handleDragEnd = () => mapRef.current?.dragging.enable();
+  // --- NEW: useEffect to auto-fit bounds after interaction ---
+  useEffect(() => {
+    const map = mapRef.current;
+    if (map && !isInteracting && vertices.length > 2) {
+      const bounds = L.latLngBounds(vertices);
+      // Fly to the new bounds with some padding and a max zoom level
+      map.flyToBounds(bounds, {
+        padding: [20, 20],
+        duration: 0.5, // Animation duration in seconds
+        maxZoom: 20
+      });
+    }
+  }, [vertices, isInteracting, mapRef]);
 
-  // --- CLICK EDGE TO ADD VERTEX ---
-  const handleEdgeClick = (e) => {
-    L.DomEvent.stopPropagation(e); // Prevent map click event
-    
-    // Create a GeoJSON line from the vertices to use with Turf.js
-    const polygonLine = turf.lineString([...vertices.map(v => [v[1], v[0]]), [vertices[0][1], vertices[0][0]]]);
-    const clickedPoint = turf.point([e.latlng.lng, e.latlng.lat]);
-    
-    // Find the nearest point on the line and its index
-    const snapped = turf.nearestPointOnLine(polygonLine, clickedPoint);
-    const newVertex = [snapped.geometry.coordinates[1], snapped.geometry.coordinates[0]]; // Back to [lat, lng]
-    const insertIndex = snapped.properties.index + 1;
-
-    // Create a new vertices array with the new point inserted
-    const newVertices = [...vertices];
-    newVertices.splice(insertIndex, 0, newVertex);
-    
-    onVerticesChange(newVertices);
-    onInteraction();
-  };
 
   // --- CLICK VERTEX TO REMOVE ---
   const handleVertexClick = (indexToRemove) => {
@@ -59,9 +61,26 @@ const InteractiveMap = ({
     }
     const newVertices = vertices.filter((_, index) => index !== indexToRemove);
     onVerticesChange(newVertices);
-    onInteraction();
+    onInteractionEnd();
   };
-  
+
+  const midpoints = useMemo(() => {
+    if (vertices.length < 2) return [];
+
+    const points = [];
+    for (let i = 0; i < vertices.length; i++) {
+      const p1 = vertices[i];
+      const p2 = vertices[(i + 1) % vertices.length];
+
+      points.push({
+        position: L.latLng((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2),
+        insertIndex: i + 1,
+        edgeIndex: i
+      });
+    }
+    return points;
+  }, [vertices]);
+
   const mapCenter = useMemo(() => {
     return vertices.length > 0
       ? L.latLngBounds(vertices).getCenter()
@@ -80,62 +99,112 @@ const InteractiveMap = ({
       >
         <LayersControl position="topright">
           <LayersControl.BaseLayer name="Standard Map">
-            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap' />
+            {/* --- MODIFIED: Added maxZoom property --- */}
+            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap' maxZoom={20} />
           </LayersControl.BaseLayer>
           <LayersControl.BaseLayer checked name="Satellite & Labels">
-            <TileLayer url="https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}" subdomains={["mt0", "mt1", "mt2", "mt3"]} attribution="&copy; Google" />
+            {/* --- MODIFIED: Added maxZoom property --- */}
+            <TileLayer url="https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}" subdomains={["mt0", "mt1", "mt2", "mt3"]} attribution="&copy; Google" maxZoom={20} />
           </LayersControl.BaseLayer>
         </LayersControl>
-        
-        <FlightGrid vertices={vertices} angle={flightAngle} />
-        
-        {/* The main polygon outline */}
-        {vertices.length > 1 && (
-            <Polyline 
-              positions={[...vertices, vertices[0]]} 
-              pathOptions={{ color: '#007cbf', weight: 5, opacity: 0.8 }}
-              eventHandlers={{ click: handleEdgeClick }}
-            />
-        )}
-        
-        {/* The draggable vertices (corners) */}
-        {vertices.map((position, index) => (
-            <CircleMarker
-                key={`vertex-${index}`}
-                center={position}
-                draggable={true}
-                eventHandlers={{
-                    mousedown: handleDragStart, // Disable map panning when starting to drag a vertex
-                    drag: (e) => {
-                      const newVertices = [...vertices];
-                      newVertices[index] = [e.target.getLatLng().lat, e.target.getLatLng().lng];
-                      onVerticesChange(newVertices);
-                    },
-                    dragend: () => {
-                        handleDragEnd(); // Re-enable map panning
-                        onInteraction();
-                    },
-                    // Direct click on a vertex removes it
-                    click: () => handleVertexClick(index),
-                }}
-                radius={8}
-                pathOptions={{ color: '#007cbf', fillColor: '#fff', weight: 2, fillOpacity: 1 }}
-            />
-        ))}
 
-        {/* The move and rotate handles for the entire polygon */}
-        <PolygonHandles 
-            vertices={vertices} 
-            onMove={onVerticesChange} 
-            onRotate={() => {}} // Rotation is now handled by onMove
-            onDragStart={handleDragStart}
-            onDragEnd={() => {
-                handleDragEnd();
-                onInteraction();
-            }}
+        <FlightGrid 
+          vertices={vertices} 
+          angle={flightAngle} 
+          isInteracting={isInteracting} 
         />
 
-        {/* The permanent project location marker */}
+        <Polyline
+          positions={[...vertices, vertices.length > 2 ? vertices[0] : null]}
+          pathOptions={{ color: '#007cbf', weight: 5, opacity: 0.8 }}
+        />
+
+        {/* Draggable Primary Vertices */}
+        {vertices.map((position, index) => {
+          const vertexIcon = L.divIcon({
+            html: `<div style="
+              width: 16px; 
+              height: 16px; 
+              background-color: white; 
+              border: 2px solid #007cbf; 
+              border-radius: 50%;
+              cursor: move;
+            "></div>`,
+            className: 'vertex-handle',
+            iconSize: [16, 16],
+            iconAnchor: [8, 8],
+          });
+
+          return (
+            <Marker
+              key={`vertex-${index}`}
+              position={position}
+              icon={vertexIcon}
+              draggable={true}
+              eventHandlers={{
+                dragstart: onInteractionStart,
+                drag: (e) => {
+                  const marker = e.target;
+                  const newLatLng = marker.getLatLng();
+                  const newVertices = [...vertices];
+                  newVertices[index] = [newLatLng.lat, newLatLng.lng];
+                  onVerticesChange(newVertices);
+                },
+                dragend: onInteractionEnd,
+                click: (e) => {
+                  L.DomEvent.stopPropagation(e);
+                  // A small delay to distinguish from a drag
+                  setTimeout(() => {
+                    handleVertexClick(index);
+                  }, 50);
+                },
+                mouseover: (e) => {
+                  e.target.getElement().style.cursor = 'move';
+                  e.target.getElement().style.zIndex = '1000';
+                },
+                mouseout: (e) => {
+                  e.target.getElement().style.cursor = '';
+                  e.target.getElement().style.zIndex = '';
+                }
+              }}
+            />
+          );
+        })}
+
+        {/* Midpoint markers for adding new vertices */}
+        {midpoints.map((midpoint, index) => (
+          <Marker
+            key={`midpoint-${index}`}
+            position={midpoint.position}
+            icon={midpointIcon}
+            eventHandlers={{
+              click: (e) => {
+                L.DomEvent.stopPropagation(e);
+                const newVertex = [e.latlng.lat, e.latlng.lng];
+                const newVertices = [...vertices];
+                newVertices.splice(midpoint.insertIndex, 0, newVertex);
+                onVerticesChange(newVertices);
+                onInteractionEnd();
+              },
+              mouseover: (e) => {
+                e.target.getElement().style.cursor = 'pointer';
+                e.target.getElement().style.zIndex = '1000';
+              },
+              mouseout: (e) => {
+                e.target.getElement().style.cursor = '';
+                e.target.getElement().style.zIndex = '';
+              }
+            }}
+          />
+        ))}
+
+        <PolygonHandles
+          vertices={vertices}
+          onMove={onVerticesChange}
+          onDragStart={onInteractionStart}
+          onDragEnd={onInteractionEnd}
+        />
+
         {project && <Marker position={[project.latitude, project.longitude]}><Tooltip permanent>{project.name}</Tooltip></Marker>}
       </MapContainer>
     </div>

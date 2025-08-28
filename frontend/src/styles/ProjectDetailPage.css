@@ -1,231 +1,5 @@
 /* frontend/src/styles/ProjectDetailPage.css */
 
-/* Main container is now a column to stack header on top of body */
-.project-detail-container {
-  display: flex;
-  flex-direction: column; /* Lays out header and body vertically */
-  height: 100vh;
-  width: 100vw;
-  background-color: #f0f2f5;
-  color: #333;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, "Noto Sans", sans-serif;
-}
-
-.loading-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
-  width: 100vw;
-}
-
-/* NEW: This wrapper holds the sidebar and map content side-by-side */
-.page-body-container {
-  display: flex;
-  flex-grow: 1; /* Takes up all available vertical space below the header */
-  overflow: hidden; /* Prevents double scrollbars */
-}
-
-/* Left Panel (Sidebar) */
-.left-panel {
-  width: 320px;
-  flex-shrink: 0;
-  background-color: #ffffff;
-  border-right: 1px solid #e8e8e8;
-  display: flex;
-  flex-direction: column;
-  padding: 1.5rem;
-  overflow-y: auto; /* Add scroll if content is too long */
-}
-
-.panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
-}
-
-.plan-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin: 0;
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr; /* Changed to 4 columns */
-  gap: 1rem;
-  margin-bottom: 2rem;
-  text-align: center;
-}
-
-.stats-grid div span {
-  font-size: 1.5rem;
-  font-weight: 500;
-}
-
-.stats-grid div p {
-  font-size: 0.8rem;
-  color: #6b7280;
-  margin: 0;
-}
-
-.control-section {
-  margin-bottom: 1.5rem;
-}
-
-.control-section h4 {
-  margin-bottom: 0.75rem;
-  font-weight: 500;
-}
-
-.control-section.toggle-section {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem 0;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.control-section .ant-slider {
-  margin: 0;
-}
-
-.control-section span {
-  text-align: right;
-  display: block;
-  margin-top: 0.5rem;
-  color: #555;
-}
-
-.panel-footer {
-  margin-top: auto;
-}
-
-/* Main Content (Map Area) */
-/* No longer has a header inside it */
-.main-content {
-  flex-grow: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Header (Full Width) - UPDATED TO MATCH SCREENSHOT */
-.main-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
-  height: 64px;
-  background-color: #1f2937;
-  color: #d1d5db;
-  flex-shrink: 0; /* Prevents the header from shrinking */
-  width: 100%;
-  border-bottom: 1px solid #374151;
-}
-
-.breadcrumbs {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 1.1rem;
-}
-
-.breadcrumbs .back-icon {
-  font-size: 1.8rem;
-  color: #9ca3af;
-  cursor: pointer;
-  transition: color 0.2s;
-  margin-right: 8px;
-}
-.breadcrumbs .back-icon:hover {
-  color: #fff;
-}
-
-.breadcrumbs span {
-  color: #9ca3af;
-  cursor: pointer;
-}
-.breadcrumbs span:hover {
-  color: #fff;
-}
-
-.breadcrumbs span:last-child {
-  font-weight: 500;
-  color: #fff;
-  cursor: default;
-}
-
-.main-nav {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 32px;
-  height: 100%;
-}
-
-.main-nav a {
-  color: #9ca3af;
-  text-decoration: none;
-  font-weight: 500;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  border-bottom: 3px solid transparent;
-  transition: all 0.2s ease-in-out;
-}
-
-.main-nav a.active,
-.main-nav a:hover {
-  color: #fff;
-}
-
-.main-nav a.active {
-  border-bottom-color: #4f46e5;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.header-actions .ant-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #374151;
-  border-color: #4b5563;
-  color: #d1d5db;
-}
-.header-actions .ant-btn:hover {
-  border-color: #6366f1;
-  color: #fff;
-}
-
-.header-actions .ant-btn-primary {
-  background: #4f46e5;
-  border-color: #4f46e5;
-  color: #fff;
-}
-.header-actions .ant-btn-primary:hover {
-  background: #4338ca;
-  border-color: #4338ca;
-}
-
-.map-container {
-  flex-grow: 1;
-  position: relative;
-}
-
-/* --- LEAFLET FIX --- */
-.leaflet-map-container {
-  width: 100%;
-  height: 100%;
-}
-/* frontend/src/styles/ProjectDetailPage.css */
-
 /* --- Main Layout --- */
 .project-detail-container {
   display: flex;
@@ -360,221 +134,6 @@
   border-bottom: none;
 }
 
-.section-super-title {
-  font-size: 0.8rem;
-  color: #6b7280;
-  margin-bottom: 0.5rem;
-  padding-top: 1rem;
-}
-
-/* Capture Plan Section */
-.plan-selector-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.plan-selector-btn {
-  flex-grow: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  text-align: left;
-  height: 40px;
-  font-size: 1rem;
-  font-weight: 500;
-  padding: 0 12px;
-}
-.plan-selector-btn span {
-  flex-grow: 1;
-  margin-left: 8px;
-}
-.plan-actions-btn,
-.add-plan-btn {
-  height: 40px;
-  width: 40px;
-}
-.add-plan-btn {
-  font-size: 1.2rem;
-}
-
-/* Stats Grid */
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1rem;
-  text-align: center;
-}
-.stats-grid div span {
-  font-size: 1.5rem;
-  font-weight: 500;
-}
-.stats-grid div p {
-  font-size: 0.8rem;
-  color: #6b7280;
-  margin: 0;
-}
-
-/* Common Section Styles */
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-  font-size: 1.2rem;
-  color: #374151;
-}
-.section-title h4 {
-  font-size: 1rem;
-  font-weight: 500;
-  margin: 0;
-}
-.section-title .icon-title {
-  margin-left: 0;
-}
-.section-title svg {
-  font-size: 1.1rem;
-  color: #4b5563;
-}
-.section-sub-text {
-  font-size: 0.85rem;
-  color: #6b7280;
-  margin-left: 30px;
-  margin-top: -5px;
-  margin-bottom: 12px;
-}
-.section-sub-text.full {
-  margin-left: 0;
-  line-height: 1.4;
-}
-
-.altitude-control {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  padding: 4px;
-}
-.altitude-control .ant-btn {
-  border: none;
-}
-.altitude-control input {
-  flex-grow: 1;
-  border: none;
-  outline: none;
-  font-size: 1rem;
-  font-weight: 500;
-  text-align: right;
-  padding-right: 4px;
-  width: 50px;
-}
-.altitude-control span {
-  font-size: 1rem;
-  color: #6b7280;
-  padding-right: 4px;
-}
-.altitude-control input::-webkit-outer-spin-button,
-.altitude-control input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-.altitude-control input[type="number"] {
-  -moz-appearance: textfield;
-}
-
-/* Toggle, Link, Button Sections */
-.toggle-section,
-.link-section,
-.button-section {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.toggle-section.large h4 {
-  font-size: 1.1rem;
-  font-weight: 600;
-}
-.link-section,
-.button-section .section-title {
-  margin-bottom: 0;
-}
-.link-section {
-  cursor: pointer;
-}
-.link-section svg:last-of-type {
-  font-size: 1.2rem;
-  color: #9ca3af;
-}
-.toggle-section .section-title svg:last-of-type {
-  color: #9ca3af;
-  cursor: help;
-  font-size: 1rem;
-  margin-left: 4px;
-}
-.rtk-status {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background-color: #d1d5db;
-}
-.rtk-status.active {
-  background-color: #22c55e;
-}
-.button-section .ant-btn {
-  border-color: #d1d5db;
-}
-
-/* Panel Footer */
-.panel-footer {
-  margin-top: auto;
-  padding: 1rem 0;
-  text-align: center;
-}
-.panel-footer p {
-  font-size: 0.9rem;
-  margin-bottom: 1rem;
-}
-.panel-footer a {
-  color: #4f46e5;
-  font-weight: 500;
-  text-decoration: none;
-}
-.panel-footer .ant-btn {
-  color: #6b7280;
-}
-
-/* --- Advanced Settings Panel --- */
-.advanced-settings-panel {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-.advanced-settings-header {
-  display: flex;
-  align-items: center;
-  padding: 1rem 0;
-  border-bottom: 1px solid #f0f0f0;
-  margin-bottom: 1rem;
-  flex-shrink: 0;
-}
-.advanced-settings-header .back-btn {
-  font-size: 1.5rem;
-  color: #333;
-  margin-right: 1rem;
-}
-.advanced-settings-header h3 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin: 0;
-}
-/* Style AntD select dropdown */
-.advanced-settings-panel .ant-select-selector {
-  height: 40px !important;
-  padding: 0 11px !important;
-  display: flex;
-  align-items: center;
-}
-
 /* Main Content Area */
 .main-content {
   flex-grow: 1;
@@ -589,8 +148,6 @@
   width: 100%;
   height: 100%;
 }
-
-/* Add these styles to the END of frontend/src/styles/ProjectDetailPage.css */
 
 .slider {
   width: 100%;
@@ -614,7 +171,7 @@
   appearance: none;
   width: 18px;
   height: 18px;
-  background: var(--primary-blue);
+  background: #007cbf;
   cursor: pointer;
   border-radius: 50%;
 }
@@ -622,29 +179,12 @@
 .slider::-moz-range-thumb {
   width: 18px;
   height: 18px;
-  background: var(--primary-blue);
+  background: #007cbf;
   cursor: pointer;
   border-radius: 50%;
 }
 
-/* --- Interactive Cursors --- */
-
-/* Change cursor to a pointer when hovering over the main polygon edge */
-.leaflet-interactive[stroke="#007cbf"] {
-  cursor: pointer;
-}
-
-/* Change cursor to a "grab" hand when hovering over a draggable vertex */
-.draggable-vertex {
-  cursor: grab;
-}
-
-/* Change cursor to a "grabbing" hand when the vertex is being actively dragged */
-.leaflet-marker-dragging .draggable-vertex {
-  cursor: grabbing;
-}
-/* Add these styles to your existing ProjectDetailPage.css */
-
+/* --- Polygon Handles (Move/Rotate) --- */
 .polygon-handle {
   background-color: rgba(255, 255, 255, 0.9);
   border: 2px solid #007cbf;
@@ -660,23 +200,75 @@
   cursor: grabbing;
 }
 
-.vertex-action-icon {
-  background-color: rgba(255, 255, 255, 0.9);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* Add to frontend/src/styles/ProjectDetailPage.css */
+.midpoint-handle {
   cursor: pointer;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
-}
-/* Add these styles for the new edge handles */
-.edge-handle .edge-handle-icon {
-    background: #ffffff;
-    border: 2px solid #007cbf;
-    border-radius: 50%;
-    box-shadow: 0 0 5px rgba(0,0,0,0.5);
+  background: none;
+  border: none;
+  transition: transform 0.1s ease;
 }
 
-.edge-handle {
-    cursor: move !important;
+.midpoint-handle:hover {
+  transform: scale(1.2);
+}
+
+.midpoint-handle:active {
+  cursor: grabbing;
+  transform: scale(1.1);
+}
+
+/* Update in frontend/src/styles/ProjectDetailPage.css */
+.midpoint-handle-icon {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background-color: #fff;
+  border: 2px solid #28a745; /* Green color to indicate add action */
+  opacity: 0.8;
+  position: relative;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+}
+
+.midpoint-handle-icon:hover {
+  opacity: 1;
+  background-color: #f0fff4; /* Light green background on hover */
+  border-width: 3px;
+  transform: scale(1.2);
+}
+
+.midpoint-handle-icon::before,
+.midpoint-handle-icon::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  background-color: #28a745; /* Green plus sign */
+  transform: translate(-50%, -50%);
+}
+
+.midpoint-handle-icon::before {
+  width: 2px;
+  height: 10px;
+}
+
+.midpoint-handle-icon::after {
+  width: 10px;
+  height: 2px;
+}
+
+/* Add to frontend/src/styles/ProjectDetailPage.css */
+.vertex-handle {
+  cursor: move;
+  transition: transform 0.2s ease;
+}
+
+.vertex-handle:hover {
+  transform: scale(1.2);
+}
+
+.vertex-handle:active {
+  cursor: grabbing;
+  transform: scale(1.1);
 }
