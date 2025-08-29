@@ -24,7 +24,6 @@ import {
   FiSave,
   FiTrash2,
 } from "react-icons/fi";
-import { MdOutlineGpsFixed } from "react-icons/md";
 import { FaPlane, FaCube, FaPhotoVideo, FaSatelliteDish, FaCloudDownloadAlt, FaCloudUploadAlt } from "react-icons/fa";
 import * as turf from "@turf/turf";
 import api from "../apis/config";
@@ -33,7 +32,6 @@ import L from "leaflet";
 import leafletImage from 'leaflet-image';
 
 import InteractiveMap from '../components/InteractiveMap';
-// No longer needed: import DrawingControls from './DrawingControls';
 
 import "leaflet/dist/leaflet.css";
 import "../styles/ProjectDetailPage.css";
@@ -41,16 +39,12 @@ import "../styles/ProjectDetailPage.css";
 // Helper function to create a default square polygon
 const createDefaultSquare = (centerLat, centerLng, sizeMeters = 200) => {
   const centerPoint = turf.point([centerLng, centerLat]);
-  const distance = (sizeMeters / 2) / 1000; // turf.circle radius is in kilometers
+  const distance = (sizeMeters / 2) / 1000;
   const buffered = turf.circle(centerPoint, distance);
   const bbox = turf.bbox(buffered);
   const [minLng, minLat, maxLng, maxLat] = bbox;
-  // Return vertices in [lat, lng] format for Leaflet
   return [
-    [maxLat, minLng], // Top-left
-    [maxLat, maxLng], // Top-right
-    [minLat, maxLng], // Bottom-right
-    [minLat, minLng], // Bottom-left
+    [maxLat, minLng], [maxLat, maxLng], [minLat, maxLng], [minLat, minLng],
   ];
 };
 
@@ -68,6 +62,8 @@ const ProjectDetailPage = () => {
   const [vertices, setVertices] = useState([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [flightAngle, setFlightAngle] = useState(0);
+  const [isInteracting, setIsInteracting] = useState(false);
+
 
   useEffect(() => {
     const fetchProjectData = async () => {
@@ -91,18 +87,15 @@ const ProjectDetailPage = () => {
           enhanced3d: details.enhanced3d,
           liveMapHd: details.liveMapHd,
           rtkCoverage: details.rtkCoverage,
-          flightPath: details.flightPath,
-          flightPathAngle: details.flightPathAngle,
         });
-        
-        // If there's a flight path, use it. Otherwise, create a default square.
+
         const existingVertices = geoJsonToVertices(details.flightPath);
         if (existingVertices.length > 0) {
-            setVertices(existingVertices);
+          setVertices(existingVertices);
         } else {
-            const defaultVertices = createDefaultSquare(currentProject.latitude, currentProject.longitude);
-            setVertices(defaultVertices);
-            setHasUnsavedChanges(true); // Mark as unsaved since we created it
+          const defaultVertices = createDefaultSquare(currentProject.latitude, currentProject.longitude);
+          setVertices(defaultVertices);
+          setHasUnsavedChanges(true);
         }
 
         setFlightAngle(details.flightPathAngle || 0);
@@ -113,8 +106,7 @@ const ProjectDetailPage = () => {
         navigate("/projects");
       } finally {
         setLoading(false);
-        // On initial load, there are no unsaved changes from the user yet.
-        setHasUnsavedChanges(false); 
+        setHasUnsavedChanges(false);
       }
     };
     fetchProjectData();
@@ -204,7 +196,7 @@ const ProjectDetailPage = () => {
     setMission((prev) => ({ ...prev, [key]: value }));
     setHasUnsavedChanges(true);
   };
-  
+
   const handleVerticesChange = (newVertices) => {
     setVertices(newVertices);
     setHasUnsavedChanges(true);
@@ -220,18 +212,40 @@ const ProjectDetailPage = () => {
 
   const calculatedStats = useMemo(() => {
     const flightPath = verticesToGeoJson(vertices);
-    if (!flightPath) return { minutes: "0:00", acres: 0, images: 0, battery: 0 };
-    
+    if (!flightPath || !mission) {
+      return { minutes: "0:00", acres: 0, images: 0, battery: 0, resolution: 0, spacing: 20 };
+    }
     const areaMeters = turf.area(flightPath);
     const acres = parseFloat((areaMeters / 4046.86).toFixed(0));
-    const images = Math.round(acres * 18);
-    const totalSeconds = acres * 30;
+    const altitude = mission.flightAltitude > 0 ? mission.flightAltitude : 1;
+    const resolution = (altitude / 285).toFixed(1);
+    const spacing = altitude * 0.2;
+
+    // --- MODIFIED: Adjust calculations for Enhanced 3D ---
+    const flightMultiplier = mission.enhanced3d ? 2 : 1;
+    const baseImages = Math.round(acres * 18 * Math.pow(200 / altitude, 2));
+    const images = baseImages * flightMultiplier; // Double the images for the crosshatch pattern
+
+    const totalSeconds = Math.round(images * 1.7);
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = (totalSeconds % 60).toString().padStart(2, "0");
-    const battery = Math.ceil((minutes * 60 + parseInt(seconds)) / (20 * 60));
-    
-    return { minutes: `${minutes}:${seconds}`, acres, images, battery };
-  }, [vertices, verticesToGeoJson]);
+    const battery = Math.ceil(totalSeconds / (20 * 60));
+
+    return {
+      minutes: `${minutes}:${seconds}`, acres, images, battery, resolution, spacing
+    };
+  }, [vertices, mission, verticesToGeoJson]);
+
+  const AltitudeWarning = () => {
+    if (!mission) return null;
+    if (mission.flightAltitude < 100) {
+      return <p className="section-sub-text warning-text">Warning: Low Altitude</p>;
+    }
+    if (calculatedStats.resolution > 1.0) {
+      return <p className="section-sub-text suggestion-text">Suggested: &lt; 200ft</p>;
+    }
+    return null;
+  };
 
   if (loading || !mission || !project) {
     return <div className="loading-container"><Spin size="large" /></div>;
@@ -239,7 +253,7 @@ const ProjectDetailPage = () => {
 
   return (
     <div className="project-detail-container">
-       <header className="main-header">
+      <header className="main-header">
         <div className="breadcrumbs">
           <FiChevronLeft onClick={() => navigate("/projects")} className="back-icon" />
           <span onClick={() => navigate("/projects")}>Home</span> /{" "}
@@ -264,88 +278,68 @@ const ProjectDetailPage = () => {
 
       <div className="page-body-container">
         <div className="left-panel">
-          <div className="panel-section capture-plan-section">
-            <p className="section-super-title">Capture Plan</p>
-            <div className="plan-selector-row">
-              <Button className="plan-selector-btn"><FiMap /><span>{mission.name}</span></Button>
-            </div>
-          </div>
-
           <div className="panel-section stats-grid">
             <div><span>{calculatedStats.minutes}</span><p>Minutes</p></div>
             <div><span>{calculatedStats.acres}</span><p>Acres</p></div>
             <div><span>{calculatedStats.images}</span><p>Images</p></div>
             <div><span>{calculatedStats.battery}</span><p>Battery</p></div>
           </div>
-        
-          {/* Drawing Controls have been replaced with a simpler Clear button */}
+
           <div className="panel-section drawing-controls">
-              <div className="section-title">
-                  <h4>Flight Path</h4>
-              </div>
-              <p className="section-sub-text">
-                  Click an edge to add a point. Click a point to remove it. Drag points to move them.
-              </p>
-              <div className="drawing-buttons">
-                  <Button
-                      danger
-                      type="text"
-                      icon={<FiTrash2 />}
-                      onClick={handleClearFlightPath}
-                      disabled={vertices.length === 0}
-                  >
-                      Reset Area
-                  </Button>
-              </div>
+            <div className="section-title">
+              <h4>Flight Path</h4>
+            </div>
+            <p className="section-sub-text">
+              Click an edge to add a point. Click a point to remove it. Drag handles to move or rotate.
+            </p>
+            <div className="drawing-buttons">
+              <Button
+                danger
+                type="text"
+                icon={<FiTrash2 />}
+                onClick={handleClearFlightPath}
+                disabled={vertices.length === 0}
+              >
+                Reset Area
+              </Button>
+            </div>
           </div>
-          
+
           <div className="panel-section">
             <div className="section-title"><h4>Flight Direction</h4></div>
             <input type="range" min="0" max="360" value={flightAngle} className="slider"
               onChange={(e) => handleFlightAngleChange(parseInt(e.target.value, 10))}
             />
           </div>
-          
+
           <div className="panel-section">
             <div className="section-title"><FaPlane /><h4>Flight Altitude</h4></div>
-            <p className="section-sub-text">Travel Altitude: {mission.flightAltitude + 10} ft</p>
-            <div className="altitude-control">
-              <Button shape="circle" icon={<MdOutlineGpsFixed />} />
-              <input type="number" value={mission.flightAltitude}
-                onChange={(e) => handleMissionChange("flightAltitude", parseInt(e.target.value) || 0)}
+            <div className="altitude-slider-container">
+              <input
+                type="range" min="30" max="500"
+                value={mission.flightAltitude}
+                className="slider"
+                onChange={(e) => handleMissionChange("flightAltitude", parseInt(e.target.value, 10))}
+              />
+              <input
+                type="number"
+                value={mission.flightAltitude}
+                className="altitude-input"
+                onChange={(e) => handleMissionChange("flightAltitude", parseInt(e.target.value, 10) || 30)}
               />
               <span>ft</span>
             </div>
+            <p className="section-sub-text">Resolution: {calculatedStats.resolution} in / px</p>
+            <AltitudeWarning />
           </div>
 
           <div className="panel-section toggle-section">
-              <div className="section-title"><FaCube /><h4 className="icon-title">Enhanced 3D</h4><FiInfo /></div>
-              <Switch checked={mission.enhanced3d} onChange={(val) => handleMissionChange("enhanced3d", val)} />
+            <div className="section-title"><FaCube /><h4 className="icon-title">Enhanced 3D</h4><FiInfo /></div>
+            <Switch checked={mission.enhanced3d} onChange={(val) => handleMissionChange("enhanced3d", val)} />
           </div>
 
-          <div className="panel-section toggle-section">
-              <div className="section-title"><FaPhotoVideo /><h4 className="icon-title">Live Map HD</h4><FiInfo /></div>
-              <Switch checked={mission.liveMapHd} onChange={(val) => handleMissionChange("liveMapHd", val)} />
-          </div>
-
-          <div className="panel-section toggle-section no-border">
-            <div className="section-title"><FaSatelliteDish /><h4 className="icon-title">RTK Coverage</h4><FiInfo /></div>
-            <div className={`rtk-status ${mission.rtkCoverage ? "active" : ""}`}></div>
-          </div>
-          
-          <div className="panel-section button-section">
-              <div className="section-title"><FaCloudDownloadAlt /><h4 className="icon-title">Data On Demand</h4><FiInfo /></div>
-              <Button>Request</Button>
-          </div>
-          
-          <div className="panel-section button-section">
-              <div className="section-title"><FaCloudUploadAlt /><h4 className="icon-title">Import Flight Path</h4><FiInfo /></div>
-              <Button>Import</Button>
-          </div>
-          
           <div className="panel-footer">
-            <p>Don't own a drone? <a href="#simulator">Test the simulator</a></p>
-            <Button type="text" icon={<FiHelpCircle />}>Help</Button>
+            <p><a href="#simulator">Test this with the simulation</a></p>
           </div>
         </div>
 
@@ -354,9 +348,12 @@ const ProjectDetailPage = () => {
             project={project}
             vertices={vertices}
             flightAngle={flightAngle}
+            flightSpacing={calculatedStats.spacing}
+            enhanced3d={mission.enhanced3d}
+            isInteracting={isInteracting}
             onVerticesChange={handleVerticesChange}
-            onInteraction={() => setHasUnsavedChanges(true)}
-            onFlightAngleChange={handleFlightAngleChange}
+            onInteractionStart={() => setIsInteracting(true)}
+            onInteractionEnd={() => setIsInteracting(false)}
             whenCreated={setMapInstance}
           />
         </div>

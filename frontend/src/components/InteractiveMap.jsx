@@ -1,5 +1,5 @@
 // frontend/src/components/InteractiveMap.jsx
-import React, { useMemo, useRef, useCallback, useEffect } from 'react'; // --- MODIFIED: Imported useEffect
+import React, { useMemo, useRef, useEffect } from 'react';
 import {
   MapContainer,
   TileLayer,
@@ -30,6 +30,8 @@ const InteractiveMap = ({
   project,
   vertices,
   flightAngle,
+  flightSpacing,
+  enhanced3d, // --- NEW: Prop for Enhanced 3D ---
   isInteracting,
   onVerticesChange,
   onInteractionStart,
@@ -38,22 +40,20 @@ const InteractiveMap = ({
 }) => {
   const mapRef = useRef(null);
 
-  // --- NEW: useEffect to auto-fit bounds after interaction ---
+  // Auto-fit bounds after an interaction (like drag or add/remove point) is finished
   useEffect(() => {
     const map = mapRef.current;
     if (map && !isInteracting && vertices.length > 2) {
       const bounds = L.latLngBounds(vertices);
-      // Fly to the new bounds with some padding and a max zoom level
       map.flyToBounds(bounds, {
-        padding: [20, 20],
-        duration: 0.5, // Animation duration in seconds
+        padding: [50, 50],
+        duration: 0.5,
         maxZoom: 20
       });
     }
   }, [vertices, isInteracting, mapRef]);
 
-
-  // --- CLICK VERTEX TO REMOVE ---
+  // Handle clicking a vertex to remove it
   const handleVertexClick = (indexToRemove) => {
     if (vertices.length <= 3) {
       toast.warn("A flight path must have at least 3 points.");
@@ -64,33 +64,25 @@ const InteractiveMap = ({
     onInteractionEnd();
   };
 
+  // Calculate midpoints for adding new vertices
   const midpoints = useMemo(() => {
     if (vertices.length < 2) return [];
-
     const points = [];
     for (let i = 0; i < vertices.length; i++) {
       const p1 = vertices[i];
       const p2 = vertices[(i + 1) % vertices.length];
-
       points.push({
         position: L.latLng((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2),
         insertIndex: i + 1,
-        edgeIndex: i
       });
     }
     return points;
   }, [vertices]);
 
-  const mapCenter = useMemo(() => {
-    return vertices.length > 0
-      ? L.latLngBounds(vertices).getCenter()
-      : [project.latitude, project.longitude];
-  }, [vertices, project]);
-
   return (
-    <div className="map-container" style={{ cursor: 'grab' }}>
+    <div className="map-container">
       <MapContainer
-        center={mapCenter}
+        center={[project.latitude, project.longitude]}
         zoom={16}
         scrollWheelZoom={true}
         className="leaflet-map-container"
@@ -99,11 +91,9 @@ const InteractiveMap = ({
       >
         <LayersControl position="topright">
           <LayersControl.BaseLayer name="Standard Map">
-            {/* --- MODIFIED: Added maxZoom property --- */}
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap' maxZoom={20} />
           </LayersControl.BaseLayer>
           <LayersControl.BaseLayer checked name="Satellite & Labels">
-            {/* --- MODIFIED: Added maxZoom property --- */}
             <TileLayer url="https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}" subdomains={["mt0", "mt1", "mt2", "mt3"]} attribution="&copy; Google" maxZoom={20} />
           </LayersControl.BaseLayer>
         </LayersControl>
@@ -111,7 +101,8 @@ const InteractiveMap = ({
         <FlightGrid 
           vertices={vertices} 
           angle={flightAngle} 
-          isInteracting={isInteracting} 
+          spacing={flightSpacing} 
+          enhanced3d={enhanced3d} // --- MODIFIED: Pass prop to FlightGrid ---
         />
 
         <Polyline
@@ -119,22 +110,14 @@ const InteractiveMap = ({
           pathOptions={{ color: '#007cbf', weight: 5, opacity: 0.8 }}
         />
 
-        {/* Draggable Primary Vertices */}
+        {/* Draggable Primary Vertices (for moving and deleting) */}
         {vertices.map((position, index) => {
           const vertexIcon = L.divIcon({
-            html: `<div style="
-              width: 16px; 
-              height: 16px; 
-              background-color: white; 
-              border: 2px solid #007cbf; 
-              border-radius: 50%;
-              cursor: move;
-            "></div>`,
+            html: `<div class="vertex-handle-icon"></div>`,
             className: 'vertex-handle',
             iconSize: [16, 16],
             iconAnchor: [8, 8],
           });
-
           return (
             <Marker
               key={`vertex-${index}`}
@@ -144,8 +127,7 @@ const InteractiveMap = ({
               eventHandlers={{
                 dragstart: onInteractionStart,
                 drag: (e) => {
-                  const marker = e.target;
-                  const newLatLng = marker.getLatLng();
+                  const newLatLng = e.target.getLatLng();
                   const newVertices = [...vertices];
                   newVertices[index] = [newLatLng.lat, newLatLng.lng];
                   onVerticesChange(newVertices);
@@ -153,19 +135,8 @@ const InteractiveMap = ({
                 dragend: onInteractionEnd,
                 click: (e) => {
                   L.DomEvent.stopPropagation(e);
-                  // A small delay to distinguish from a drag
-                  setTimeout(() => {
-                    handleVertexClick(index);
-                  }, 50);
+                  handleVertexClick(index);
                 },
-                mouseover: (e) => {
-                  e.target.getElement().style.cursor = 'move';
-                  e.target.getElement().style.zIndex = '1000';
-                },
-                mouseout: (e) => {
-                  e.target.getElement().style.cursor = '';
-                  e.target.getElement().style.zIndex = '';
-                }
               }}
             />
           );
@@ -180,20 +151,13 @@ const InteractiveMap = ({
             eventHandlers={{
               click: (e) => {
                 L.DomEvent.stopPropagation(e);
+                onInteractionStart(); // Signal that an interaction has started
                 const newVertex = [e.latlng.lat, e.latlng.lng];
                 const newVertices = [...vertices];
                 newVertices.splice(midpoint.insertIndex, 0, newVertex);
                 onVerticesChange(newVertices);
-                onInteractionEnd();
+                onInteractionEnd(); // Signal that it has ended
               },
-              mouseover: (e) => {
-                e.target.getElement().style.cursor = 'pointer';
-                e.target.getElement().style.zIndex = '1000';
-              },
-              mouseout: (e) => {
-                e.target.getElement().style.cursor = '';
-                e.target.getElement().style.zIndex = '';
-              }
             }}
           />
         ))}
