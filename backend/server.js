@@ -1,14 +1,14 @@
 // backend/server.js
 const express = require('express');
 const mongoose = require('mongoose');
-const cors =require('cors');
+const cors = require('cors');
 
 // 1. Configure dotenv to load variables from .env file
 require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
 const projectRoutes = require('./routes/projectRoutes');
-const projectDetailRoutes = require('./routes/projectDetailRoutes'); // <-- IMPORT NEW ROUTES
+const projectDetailRoutes = require('./routes/projectDetailRoutes');
 const app = express();
 
 // Middleware
@@ -20,7 +20,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
-app.use('/api/project-details', projectDetailRoutes); // <-- USE NEW ROUTES
+app.use('/api/project-details', projectDetailRoutes);
 app.use('/api/geocode', require('./routes/geocodingRoutes'));
 
 
