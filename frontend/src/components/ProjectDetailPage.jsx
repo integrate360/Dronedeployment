@@ -4,6 +4,7 @@ import React, {
   useEffect,
   useMemo,
   useCallback,
+  useRef,
 } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
@@ -13,9 +14,7 @@ import {
   Spin,
 } from "antd";
 import {
-  FiMap,
   FiChevronLeft,
-  FiHelpCircle,
   FiInfo,
   FiShare2,
   FiUpload,
@@ -23,8 +22,9 @@ import {
   FiBell,
   FiSave,
   FiTrash2,
+  FiStopCircle,
 } from "react-icons/fi";
-import { FaPlane, FaCube, FaPhotoVideo, FaSatelliteDish, FaCloudDownloadAlt, FaCloudUploadAlt } from "react-icons/fa";
+import { FaPlane, FaCube, FaPaperPlane } from "react-icons/fa";
 import * as turf from "@turf/turf";
 import api from "../apis/config";
 
@@ -32,6 +32,7 @@ import L from "leaflet";
 import leafletImage from 'leaflet-image';
 
 import InteractiveMap from '../components/InteractiveMap';
+import DroneMarker from '../components/DroneMarker';
 
 import "leaflet/dist/leaflet.css";
 import "../styles/ProjectDetailPage.css";
@@ -57,14 +58,92 @@ const ProjectDetailPage = () => {
   const [mission, setMission] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isFlying, setIsFlying] = useState(false);
   const [mapInstance, setMapInstance] = useState(null);
-
   const [vertices, setVertices] = useState([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [flightAngle, setFlightAngle] = useState(0);
   const [isInteracting, setIsInteracting] = useState(false);
+  const [dronePosition, setDronePosition] = useState(null);
+  const websocket = useRef(null);
 
+  // Effect to manage WebSocket connection to the Python Simulation Server
+// Replace the entire useEffect for WebSocket connection with this:
 
+useEffect(() => {
+  let reconnectAttempts = 0;
+  const maxReconnectAttempts = 5;
+  let reconnectTimeout;
+
+  const connectWebSocket = () => {
+    // Connect to the Python WebSocket server, which runs on port 5001
+    const wsUrl = `ws://${window.location.hostname}:5001`;
+    websocket.current = new WebSocket(wsUrl);
+
+    websocket.current.onopen = () => {
+      toast.success("Simulation Engine Connected");
+      reconnectAttempts = 0; // Reset reconnect attempts on successful connection
+    };
+    
+    websocket.current.onclose = () => {
+      toast.warn("Simulation Engine Disconnected");
+      
+      // Attempt to reconnect with exponential backoff
+      if (reconnectAttempts < maxReconnectAttempts) {
+        reconnectAttempts++;
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000); // Exponential backoff up to 10s
+        reconnectTimeout = setTimeout(connectWebSocket, delay);
+        console.log(`Attempting to reconnect in ${delay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
+      }
+    };
+    
+    websocket.current.onerror = (error) => {
+      console.error("WebSocket error:", error);
+      toast.error("Simulation Engine Connection Error");
+    };
+
+    // Listen for messages from the simulation server
+    websocket.current.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      switch (data.type) {
+        case 'telemetry':
+          setDronePosition(data.payload);
+          break;
+        case 'status':
+          console.log('SIM_STATUS:', data.payload);
+          toast.info(data.payload);
+          break;
+        case 'simulation_end':
+          toast.success(data.payload);
+          setIsFlying(false);
+          setDronePosition(null);
+          break;
+        case 'error':
+          toast.error(data.payload);
+          setIsFlying(false);
+          setDronePosition(null);
+          break;
+        default:
+          break;
+      }
+    };
+  };
+
+  // Initial connection attempt
+  connectWebSocket();
+
+  // Cleanup on component unmount
+  return () => {
+    if (reconnectTimeout) {
+      clearTimeout(reconnectTimeout);
+    }
+    if (websocket.current) {
+      websocket.current.close();
+    }
+  };
+}, []); // Empty dependency array ensures this runs only once
+
+  // Effect to fetch initial project data from the Node.js API server
   useEffect(() => {
     const fetchProjectData = async () => {
       setLoading(true);
@@ -82,11 +161,9 @@ const ProjectDetailPage = () => {
         const details = detailsResponse.data;
 
         setMission({
-          id: details._id, name: "Map Plan",
+          id: details._id,
           flightAltitude: details.flightAltitude,
           enhanced3d: details.enhanced3d,
-          liveMapHd: details.liveMapHd,
-          rtkCoverage: details.rtkCoverage,
         });
 
         const existingVertices = geoJsonToVertices(details.flightPath);
@@ -97,9 +174,7 @@ const ProjectDetailPage = () => {
           setVertices(defaultVertices);
           setHasUnsavedChanges(true);
         }
-
         setFlightAngle(details.flightPathAngle || 0);
-
       } catch (error) {
         console.error("Data fetch error:", error);
         toast.error("Failed to fetch project data. Please try again.");
@@ -112,21 +187,10 @@ const ProjectDetailPage = () => {
     fetchProjectData();
   }, [projectId, navigate]);
 
-  useEffect(() => {
-    const handleBeforeUnload = (e) => {
-      if (hasUnsavedChanges) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [hasUnsavedChanges]);
-
+  // Utility functions for converting between Leaflet vertices and GeoJSON
   const geoJsonToVertices = useCallback((flightPath) => {
-    if (flightPath && flightPath.coordinates && flightPath.coordinates[0] && flightPath.coordinates[0].length > 3) {
-      const coords = flightPath.coordinates[0];
-      return coords.slice(0, coords.length - 1).map(p => [p[1], p[0]]);
+    if (flightPath && flightPath.coordinates && flightPath.coordinates[0].length > 3) {
+      return flightPath.coordinates[0].slice(0, -1).map(p => [p[1], p[0]]);
     }
     return [];
   }, []);
@@ -134,10 +198,11 @@ const ProjectDetailPage = () => {
   const verticesToGeoJson = useCallback((verts) => {
     if (verts.length < 3) return null;
     const geoJsonCoords = verts.map(p => [p[1], p[0]]);
-    geoJsonCoords.push(geoJsonCoords[0]);
+    geoJsonCoords.push(geoJsonCoords[0]); // Close the polygon
     return { type: 'Polygon', coordinates: [geoJsonCoords] };
   }, []);
 
+  // Handle saving project details to the Node.js API
   const handleSave = useCallback(async () => {
     if (!mission || isSaving) return;
     setIsSaving(true);
@@ -148,104 +213,77 @@ const ProjectDetailPage = () => {
       const dataToSave = {
         flightAltitude: mission.flightAltitude,
         enhanced3d: mission.enhanced3d,
-        liveMapHd: mission.liveMapHd,
         flightPath: flightPath,
         flightPathAngle: flightAngle,
       };
       await api.put(`/project-details/${projectId}`, dataToSave);
-
-      if (mapInstance && vertices.length > 0) {
-        await new Promise(resolve => {
-          const bounds = L.latLngBounds(vertices);
-          mapInstance.fitBounds(bounds, { padding: [50, 50] });
-
-          mapInstance.once('moveend zoomend', () => {
-            leafletImage(mapInstance, (err, canvas) => {
-              if (err) {
-                console.error("Could not create thumbnail:", err);
-                resolve();
-                return;
-              }
-              const thumbnail = canvas.toDataURL("image/jpeg", 0.8);
-              api.put(`/projects/${projectId}`, { thumbnail })
-                .then(() => console.log("Thumbnail updated successfully."))
-                .catch(thumbErr => console.error("Failed to update thumbnail:", thumbErr))
-                .finally(resolve);
-            });
-          });
-        });
-      }
-
       setHasUnsavedChanges(false);
       toast.success("Project saved successfully!");
-
     } catch (error) {
-      toast.error("Failed to save project details. Please try again.");
+      toast.error("Failed to save project details.");
       console.error("Save error:", error);
     } finally {
       setIsSaving(false);
     }
-  }, [mission, isSaving, vertices, flightAngle, projectId, mapInstance, verticesToGeoJson]);
+  }, [mission, isSaving, vertices, flightAngle, projectId, verticesToGeoJson]);
 
-  const handleFlightAngleChange = (newAngle) => {
-    setFlightAngle(newAngle);
-    setHasUnsavedChanges(true);
+  // Handler to send "start_mission" command via WebSocket
+  const handleFlyMission = () => {
+    if (hasUnsavedChanges) {
+      toast.warn("Please save your changes before starting the mission.");
+      return;
+    }
+    if (isFlying || !websocket.current || websocket.current.readyState !== WebSocket.OPEN) {
+      toast.error("Simulation Engine not ready.");
+      return;
+    }
+
+    const missionData = {
+      altitude: mission.flightAltitude,
+      waypoints: verticesToGeoJson(vertices).coordinates[0].slice(0, -1).map(c => ({ lat: c[1], lng: c[0] })),
+      home: { lat: project.latitude, lng: project.longitude }
+    };
+
+    const command = {
+      command: "start_mission",
+      data: missionData
+    };
+
+    websocket.current.send(JSON.stringify(command));
+    setIsFlying(true);
   };
 
-  const handleMissionChange = (key, value) => {
-    setMission((prev) => ({ ...prev, [key]: value }));
-    setHasUnsavedChanges(true);
+  // Handler to send "stop_mission" command via WebSocket
+  const handleStopMission = () => {
+    if (!isFlying || !websocket.current || websocket.current.readyState !== WebSocket.OPEN) return;
+    
+    const command = { command: "stop_mission" };
+    websocket.current.send(JSON.stringify(command));
+    // The UI will update automatically when the "simulation_end" message is received
   };
 
   const handleVerticesChange = (newVertices) => {
     setVertices(newVertices);
     setHasUnsavedChanges(true);
-  }
-
-  const handleClearFlightPath = () => {
-    if (window.confirm("Are you sure you want to clear the flight path and reset to the default square?")) {
-      const defaultVertices = createDefaultSquare(project.latitude, project.longitude);
-      setVertices(defaultVertices);
-      setHasUnsavedChanges(true);
-    }
   };
 
   const calculatedStats = useMemo(() => {
     const flightPath = verticesToGeoJson(vertices);
-    if (!flightPath || !mission) {
-      return { minutes: "0:00", acres: 0, images: 0, battery: 0, resolution: 0, spacing: 20 };
-    }
+    if (!flightPath || !mission) return { minutes: "0:00", acres: 0, images: 0, battery: 0, resolution: 0, spacing: 20 };
     const areaMeters = turf.area(flightPath);
     const acres = parseFloat((areaMeters / 4046.86).toFixed(0));
     const altitude = mission.flightAltitude > 0 ? mission.flightAltitude : 1;
     const resolution = (altitude / 285).toFixed(1);
     const spacing = altitude * 0.2;
-
-    // --- MODIFIED: Adjust calculations for Enhanced 3D ---
     const flightMultiplier = mission.enhanced3d ? 2 : 1;
     const baseImages = Math.round(acres * 18 * Math.pow(200 / altitude, 2));
-    const images = baseImages * flightMultiplier; // Double the images for the crosshatch pattern
-
+    const images = baseImages * flightMultiplier;
     const totalSeconds = Math.round(images * 1.7);
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = (totalSeconds % 60).toString().padStart(2, "0");
     const battery = Math.ceil(totalSeconds / (20 * 60));
-
-    return {
-      minutes: `${minutes}:${seconds}`, acres, images, battery, resolution, spacing
-    };
+    return { minutes: `${minutes}:${seconds}`, acres, images, battery, resolution, spacing };
   }, [vertices, mission, verticesToGeoJson]);
-
-  const AltitudeWarning = () => {
-    if (!mission) return null;
-    if (mission.flightAltitude < 100) {
-      return <p className="section-sub-text warning-text">Warning: Low Altitude</p>;
-    }
-    if (calculatedStats.resolution > 1.0) {
-      return <p className="section-sub-text suggestion-text">Suggested: &lt; 200ft</p>;
-    }
-    return null;
-  };
 
   if (loading || !mission || !project) {
     return <div className="loading-container"><Spin size="large" /></div>;
@@ -256,8 +294,7 @@ const ProjectDetailPage = () => {
       <header className="main-header">
         <div className="breadcrumbs">
           <FiChevronLeft onClick={() => navigate("/projects")} className="back-icon" />
-          <span onClick={() => navigate("/projects")}>Home</span> /{" "}
-          <span>{project?.name || "Project"}</span>
+          <span onClick={() => navigate("/projects")}>Home</span> / <span>{project?.name || "Project"}</span>
         </div>
         <nav className="main-nav">
           <a href="#fly" className="active">Fly</a>
@@ -269,10 +306,6 @@ const ProjectDetailPage = () => {
           <Button type="primary" icon={<FiSave />} onClick={handleSave} loading={isSaving} disabled={!hasUnsavedChanges && !isSaving}>
             {isSaving ? 'Saving...' : 'Save'}
           </Button>
-          <Button type="default" icon={<FiShare2 />}>Share</Button>
-          <Button icon={<FiUpload />} />
-          <Button icon={<FiSettings />} />
-          <Button icon={<FiBell />} />
         </div>
       </header>
 
@@ -285,61 +318,31 @@ const ProjectDetailPage = () => {
             <div><span>{calculatedStats.battery}</span><p>Battery</p></div>
           </div>
 
-          <div className="panel-section drawing-controls">
-            <div className="section-title">
-              <h4>Flight Path</h4>
-            </div>
-            <p className="section-sub-text">
-              Click an edge to add a point. Click a point to remove it. Drag handles to move or rotate.
-            </p>
-            <div className="drawing-buttons">
-              <Button
-                danger
-                type="text"
-                icon={<FiTrash2 />}
-                onClick={handleClearFlightPath}
-                disabled={vertices.length === 0}
-              >
-                Reset Area
-              </Button>
-            </div>
-          </div>
-
-          <div className="panel-section">
-            <div className="section-title"><h4>Flight Direction</h4></div>
-            <input type="range" min="0" max="360" value={flightAngle} className="slider"
-              onChange={(e) => handleFlightAngleChange(parseInt(e.target.value, 10))}
-            />
-          </div>
-
           <div className="panel-section">
             <div className="section-title"><FaPlane /><h4>Flight Altitude</h4></div>
             <div className="altitude-slider-container">
-              <input
-                type="range" min="30" max="500"
-                value={mission.flightAltitude}
-                className="slider"
-                onChange={(e) => handleMissionChange("flightAltitude", parseInt(e.target.value, 10))}
-              />
-              <input
-                type="number"
-                value={mission.flightAltitude}
-                className="altitude-input"
-                onChange={(e) => handleMissionChange("flightAltitude", parseInt(e.target.value, 10) || 30)}
-              />
-              <span>ft</span>
+                <input type="range" min="30" max="500" value={mission.flightAltitude} className="slider" onChange={(e) => { setMission(m => ({...m, flightAltitude: parseInt(e.target.value, 10)})); setHasUnsavedChanges(true); }}/>
+                <input type="number" value={mission.flightAltitude} className="altitude-input" onChange={(e) => { setMission(m => ({...m, flightAltitude: parseInt(e.target.value, 10) || 30})); setHasUnsavedChanges(true); }}/>
+                <span>ft</span>
             </div>
-            <p className="section-sub-text">Resolution: {calculatedStats.resolution} in / px</p>
-            <AltitudeWarning />
           </div>
-
+          
           <div className="panel-section toggle-section">
             <div className="section-title"><FaCube /><h4 className="icon-title">Enhanced 3D</h4><FiInfo /></div>
-            <Switch checked={mission.enhanced3d} onChange={(val) => handleMissionChange("enhanced3d", val)} />
+            <Switch checked={mission.enhanced3d} onChange={(val) => { setMission(m => ({...m, enhanced3d: val})); setHasUnsavedChanges(true); }} />
           </div>
 
           <div className="panel-footer">
-            <p><a href="#simulator">Test this with the simulation</a></p>
+            {isFlying ? (
+              <Button type="primary" danger size="large" icon={<FiStopCircle />} onClick={handleStopMission} block>
+                Stop Simulation
+              </Button>
+            ) : (
+              <Button type="primary" size="large" icon={<FaPaperPlane />} onClick={handleFlyMission} disabled={hasUnsavedChanges} block style={{ background: '#28a745', borderColor: '#28a745' }}>
+                Fly Mission
+              </Button>
+            )}
+            {hasUnsavedChanges && <p className="section-sub-text warning-text" style={{ textAlign: 'center', marginTop: '8px' }}>Save changes to enable flight.</p>}
           </div>
         </div>
 
@@ -355,7 +358,9 @@ const ProjectDetailPage = () => {
             onInteractionStart={() => setIsInteracting(true)}
             onInteractionEnd={() => setIsInteracting(false)}
             whenCreated={setMapInstance}
-          />
+          >
+            {isFlying && <DroneMarker position={dronePosition} />}
+          </InteractiveMap>
         </div>
       </div>
     </div>
