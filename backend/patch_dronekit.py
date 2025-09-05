@@ -1,4 +1,4 @@
-# patch_dronekit.py
+# backend/patch_dronekit.py
 import collections
 import collections.abc
 
