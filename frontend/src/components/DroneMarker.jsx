@@ -1,55 +1,53 @@
 // frontend/src/components/DroneMarker.jsx
-import React from 'react';
+import React, { forwardRef } from 'react';
 import { Marker, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
-import { FaPaperPlane, FaArrowUp, FaPlane } from 'react-icons/fa';
 import ReactDOMServer from 'react-dom/server';
 
-const DroneMarker = ({ position, isActive = false }) => {
+const DroneMarker = forwardRef(({ position, isActive = false }, ref) => {
   if (!position || typeof position.lat !== 'number' || typeof position.lng !== 'number') {
     return null;
   }
 
-  // Create a custom drone icon using available icons
   const iconHtml = ReactDOMServer.renderToString(
     <div 
-      className={`drone-icon-container ${isActive ? 'active' : ''}`} 
-      style={{ transform: `rotate(${position.heading || 0}deg)` }}
+      className={`drone-icon-container ${isActive ? 'active' : ''}`}
+      style={{ '--drone-heading': `${position.heading || 0}deg` }}
     >
-      <FaPaperPlane color={isActive ? "#ff6b35" : "#007cbf"} size={16} />
+      <div className="drone-icon-inner">🚁</div>
     </div>
   );
 
   const droneIcon = L.divIcon({
     html: iconHtml,
     className: `drone-icon ${isActive ? 'active' : ''}`,
-    iconSize: [30, 30],
-    iconAnchor: [15, 15],
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
   });
 
-  const altitudeFt = position.alt_feet ? position.alt_feet.toFixed(0) : 0;
-  const speedMps = position.ground_speed ? position.ground_speed.toFixed(1) : 0;
-  const heading = position.heading ? position.heading.toFixed(0) : 0;
-
   return (
-    <Marker position={[position.lat, position.lng]} icon={droneIcon}>
-      <Tooltip permanent direction="top" offset={[0, -10]}>
+    <Marker
+      ref={ref}
+      position={[position.lat, position.lng]}
+      icon={droneIcon}
+      zIndexOffset={1000}
+    >
+      <Tooltip permanent direction="top" offset={[0, -20]}>
         <div className="drone-tooltip">
           <div className="tooltip-header">
-            <FaPlane size={12} />
-            <span>Drone Position</span>
+            <span>🚁 Drone Position</span>
           </div>
           <div className="tooltip-row">
             <span className="label">Altitude:</span>
-            <span className="value">{altitudeFt} ft</span>
+            <span className="value">{position.alt_feet ? position.alt_feet.toFixed(0) : 0} ft</span>
           </div>
           <div className="tooltip-row">
             <span className="label">Speed:</span>
-            <span className="value">{speedMps} m/s</span>
+            <span className="value">{position.ground_speed ? position.ground_speed.toFixed(1) : 0} m/s</span>
           </div>
           <div className="tooltip-row">
             <span className="label">Heading:</span>
-            <span className="value">{heading}°</span>
+            <span className="value">{position.heading ? position.heading.toFixed(0) : 0}°</span>
           </div>
           {position.battery && (
             <div className="tooltip-row">
@@ -61,6 +59,6 @@ const DroneMarker = ({ position, isActive = false }) => {
       </Tooltip>
     </Marker>
   );
-};
+});
 
 export default DroneMarker;

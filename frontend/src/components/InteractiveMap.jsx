@@ -15,7 +15,6 @@ import {
   Marker,
   Tooltip,
   LayersControl,
-  CircleMarker,
   Popup
 } from 'react-leaflet';
 import L from 'leaflet';
@@ -24,6 +23,7 @@ import { toast } from 'react-toastify';
 import FlightGrid from './FlightGrid';
 import PolygonHandles from './PolygonHandles';
 import DroneMarker from './DroneMarker';
+import DroneAnimation from './DroneAnimation';
 
 // Photo marker icon
 const createPhotoIcon = () => {
@@ -65,6 +65,7 @@ const InteractiveMap = forwardRef(({
   const mapRef = useRef(null);
   const websocketRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
+  const droneMarkerRef = useRef(null);
 
   // Simulation state
   const [dronePosition, setDronePosition] = useState(null);
@@ -77,21 +78,23 @@ const InteractiveMap = forwardRef(({
     currentWaypoint: 0
   });
   const [photoLocations, setPhotoLocations] = useState([]);
-  const [flightPath, setFlightPath] = useState([]); // Track actual flight path
+  const [flightPath, setFlightPath] = useState([]);
   const [simulationStats, setSimulationStats] = useState({
     startTime: null,
     photosToTaken: 0,
     distanceFlown: 0,
     batteryLevel: 100
   });
+  const [animationState, setAnimationState] = useState({ status: null, altitude: 0 });
+  const [simulationSummary, setSimulationSummary] = useState(null);
 
   const connectWebSocket = useCallback(() => {
     if (websocketRef.current?.readyState === WebSocket.OPEN) {
-      return; // Already connected
+      return;
     }
 
     try {
-      const ws = new WebSocket('ws://localhost:8765');
+      const ws = new WebSocket('ws://localhost:5000');
       websocketRef.current = ws;
 
       ws.onopen = () => {
@@ -99,7 +102,6 @@ const InteractiveMap = forwardRef(({
         setIsConnected(true);
         toast.success("Simulation Engine Connected");
 
-        // Clear any pending reconnect attempts
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current);
           reconnectTimeoutRef.current = null;
@@ -111,11 +113,8 @@ const InteractiveMap = forwardRef(({
         setIsConnected(false);
         setDronePosition(null);
 
-        // Only show disconnect message if it wasn't a clean shutdown
         if (event.code !== 1000) {
           toast.warn("Simulation Engine Disconnected");
-
-          // Attempt to reconnect after 3 seconds
           reconnectTimeoutRef.current = setTimeout(() => {
             console.log('Attempting to reconnect...');
             connectWebSocket();
@@ -143,7 +142,49 @@ const InteractiveMap = forwardRef(({
     }
   }, []);
 
-  // Handle different types of WebSocket messages
+  // Handle drone position updates smoothly
+  useEffect(() => {
+    if (dronePosition && droneMarkerRef.current) {
+      const marker = droneMarkerRef.current;
+      const newPos = [dronePosition.lat, dronePosition.lng];
+      
+      marker.setLatLng(newPos);
+      
+      const tooltip = marker.getTooltip();
+      if (tooltip) {
+        const altitudeFt = dronePosition.alt_feet ? dronePosition.alt_feet.toFixed(0) : 0;
+        const speedMps = dronePosition.ground_speed ? dronePosition.ground_speed.toFixed(1) : 0;
+        const heading = dronePosition.heading ? dronePosition.heading.toFixed(0) : 0;
+        
+        tooltip.setContent(`
+          <div class="drone-tooltip">
+            <div class="tooltip-header">
+              <span>🚁 Drone Position</span>
+            </div>
+            <div class="tooltip-row">
+              <span class="label">Altitude:</span>
+              <span class="value">${altitudeFt} ft</span>
+            </div>
+            <div class="tooltip-row">
+              <span class="label">Speed:</span>
+              <span class="value">${speedMps} m/s</span>
+            </div>
+            <div class="tooltip-row">
+              <span class="label">Heading:</span>
+              <span class="value">${heading}°</span>
+            </div>
+            ${dronePosition.battery ? `
+            <div class="tooltip-row">
+              <span class="label">Battery:</span>
+              <span class="value">${dronePosition.battery}%</span>
+            </div>
+            ` : ''}
+          </div>
+        `);
+      }
+    }
+  }, [dronePosition]);
+
   const handleWebSocketMessage = useCallback((data) => {
     switch (data.type) {
       case 'connected':
@@ -152,95 +193,107 @@ const InteractiveMap = forwardRef(({
 
       case 'telemetry':
         const telemetryData = data.payload;
-        setDronePosition(telemetryData);
+        
+        // Smooth transition for drone movement
+        setDronePosition(prev => {
+          if (!prev) return telemetryData;
+          return {
+            ...telemetryData,
+            lat: (prev.lat + telemetryData.lat) / 2,
+            lng: (prev.lng + telemetryData.lng) / 2,
+            alt: (prev.alt + telemetryData.alt) / 2
+          };
+        });
 
-        // Update flight path
+        setAnimationState(prev =>
+          prev.status ? { ...prev, altitude: telemetryData.alt || 0 } : prev
+        );
+
         if (telemetryData.lat && telemetryData.lng) {
           setFlightPath(prev => {
             const newPath = [...prev, [telemetryData.lat, telemetryData.lng]];
-            // Keep only last 100 points to prevent memory issues
-            return newPath.slice(-100);
+            return newPath.slice(-500);
           });
         }
-
-        // Update simulation stats
+        
         if (telemetryData.mission_status) {
-          setMissionStatus(prev => ({
-            ...prev,
-            active: telemetryData.mission_status.active,
-            photosToTaken: telemetryData.mission_status.photos_taken,
-            currentWaypoint: telemetryData.mission_status.current_waypoint
+          setMissionStatus(prev => ({ 
+            ...prev, 
+            active: telemetryData.mission_status.active, 
+            photosToTaken: telemetryData.mission_status.photos_taken, 
+            currentWaypoint: telemetryData.mission_status.current_waypoint 
           }));
         }
-
-        setSimulationStats(prev => ({
-          ...prev,
-          batteryLevel: telemetryData.battery || 100
+        
+        setSimulationStats(prev => ({ 
+          ...prev, 
+          batteryLevel: telemetryData.battery || 100 
         }));
         break;
 
       case 'status':
         toast.info(data.payload);
+        if (data.payload.includes('Taking off')) {
+          setAnimationState({ status: 'takeoff', altitude: 0 });
+        } else if (data.payload.includes('returning to launch')) {
+          setAnimationState({ status: 'landing', altitude: dronePosition?.alt || 0 });
+        }
         break;
 
       case 'mission_info':
         const missionInfo = data.payload;
-        setMissionStatus(prev => ({
-          ...prev,
-          totalWaypoints: missionInfo.total_waypoints,
-          active: true
-        }));
-        setSimulationStats(prev => ({
-          ...prev,
-          startTime: new Date()
-        }));
+        setMissionStatus(prev => ({ ...prev, totalWaypoints: missionInfo.total_waypoints, active: true }));
+        setSimulationStats(prev => ({ ...prev, startTime: new Date() }));
         toast.info(`Mission started: ${missionInfo.total_waypoints} waypoints, estimated ${missionInfo.estimated_time}s`);
         break;
 
       case 'waypoint_progress':
         const progress = data.payload;
-        setMissionStatus(prev => ({
-          ...prev,
-          currentWaypoint: progress.current,
-          totalWaypoints: progress.total,
-          progress: progress.percentage
-        }));
+        setMissionStatus(prev => ({ ...prev, currentWaypoint: progress.current, totalWaypoints: progress.total, progress: progress.percentage }));
         break;
 
       case 'photo_taken':
         const photoData = data.payload;
-        setPhotoLocations(prev => [...prev, {
-          id: photoData.photo_number,
-          lat: photoData.location.lat,
-          lng: photoData.location.lng,
-          altitude: photoData.location.altitude,
-          timestamp: new Date()
+        setPhotoLocations(prev => [...prev, { 
+          id: photoData.photo_number, 
+          lat: photoData.location.lat, 
+          lng: photoData.location.lng, 
+          altitude: photoData.location.altitude, 
+          timestamp: new Date() 
         }]);
-        setSimulationStats(prev => ({
-          ...prev,
-          photosToTaken: photoData.photo_number
-        }));
+        setSimulationStats(prev => ({ ...prev, photosToTaken: photoData.photo_number }));
         break;
 
       case 'mission_complete':
         const completionData = data.payload;
+        setSimulationSummary({
+          photosTaken: completionData.photos_taken,
+          waypointsCompleted: completionData.waypoints_completed,
+          distanceFlown: completionData.distance_flown,
+          areaCovered: completionData.area_covered,
+          missionDuration: completionData.mission_duration
+        });
         toast.success(`Mission Complete! Photos taken: ${completionData.photos_taken}`);
         setMissionStatus(prev => ({ ...prev, active: false }));
         onSimulationStateChange(false);
+        setAnimationState({ status: 'landing', altitude: dronePosition?.alt || 0 });
         break;
 
       case 'simulation_end':
         toast.success(data.payload);
         onSimulationStateChange(false);
         setMissionStatus(prev => ({ ...prev, active: false }));
-        // Clear drone position after a short delay
-        setTimeout(() => setDronePosition(null), 2000);
+        setTimeout(() => {
+          setAnimationState({ status: null, altitude: 0 });
+          setDronePosition(null);
+        }, 2000);
         break;
 
       case 'error':
         toast.error(data.payload);
         onSimulationStateChange(false);
         setMissionStatus(prev => ({ ...prev, active: false }));
+        setAnimationState({ status: null, altitude: 0 });
         break;
 
       case 'warning':
@@ -255,9 +308,8 @@ const InteractiveMap = forwardRef(({
         console.log('Unknown message type:', data.type, data.payload);
         break;
     }
-  }, [onSimulationStateChange]);
+  }, [onSimulationStateChange, dronePosition?.alt]);
 
-  // Initialize WebSocket connection
   useEffect(() => {
     connectWebSocket();
 
@@ -271,7 +323,6 @@ const InteractiveMap = forwardRef(({
     };
   }, [connectWebSocket]);
 
-  // Auto-fit bounds when vertices change
   useEffect(() => {
     const map = mapRef.current;
     if (map && !isInteracting && vertices.length > 2) {
@@ -280,7 +331,6 @@ const InteractiveMap = forwardRef(({
     }
   }, [vertices, isInteracting]);
 
-  // Expose control methods to parent component
   useImperativeHandle(ref, () => ({
     startMission(missionData) {
       if (!isConnected) {
@@ -293,8 +343,8 @@ const InteractiveMap = forwardRef(({
           command: "start_mission",
           data: {
             ...missionData,
-            enhanced3d: enhanced3d, // Include enhanced 3D setting
-            flight_pattern: "survey" // Specify this is a survey mission
+            enhanced3d: enhanced3d,
+            flight_pattern: "survey"
           }
         };
 
@@ -304,6 +354,8 @@ const InteractiveMap = forwardRef(({
         // Reset simulation state
         setPhotoLocations([]);
         setFlightPath([]);
+        setDronePosition(null);
+        setSimulationSummary(null);
         setMissionStatus({
           active: true,
           progress: 0,
@@ -311,6 +363,13 @@ const InteractiveMap = forwardRef(({
           totalWaypoints: 0,
           currentWaypoint: 0
         });
+
+        // Center map on the mission area
+        if (vertices.length > 0) {
+          const map = mapRef.current;
+          const bounds = L.latLngBounds(vertices);
+          map.flyToBounds(bounds, { padding: [50, 50], duration: 1 });
+        }
 
       } else {
         toast.error("Connection to simulation engine lost. Reconnecting...");
@@ -339,9 +398,8 @@ const InteractiveMap = forwardRef(({
         websocketRef.current.send(JSON.stringify(command));
       }
     }
-  }), [isConnected, enhanced3d, onSimulationStateChange, connectWebSocket]);
+  }), [isConnected, enhanced3d, onSimulationStateChange, connectWebSocket, vertices]);
 
-  // Handle vertex interactions
   const handleVertexClick = (indexToRemove) => {
     if (vertices.length <= 3) {
       toast.warn("A flight path must have at least 3 points.");
@@ -352,7 +410,6 @@ const InteractiveMap = forwardRef(({
     onInteractionEnd();
   };
 
-  // Calculate midpoints for adding new vertices
   const midpoints = useMemo(() => {
     if (vertices.length < 2) return [];
     const points = [];
@@ -366,6 +423,51 @@ const InteractiveMap = forwardRef(({
     }
     return points;
   }, [vertices]);
+
+  const SimulationSummaryModal = () => {
+    if (!simulationSummary) return null;
+    
+    const acresCovered = (simulationSummary.areaCovered / 4046.86).toFixed(2);
+    const hours = Math.floor(simulationSummary.missionDuration / 3600);
+    const minutes = Math.floor((simulationSummary.missionDuration % 3600) / 60);
+    const seconds = Math.floor(simulationSummary.missionDuration % 60);
+    
+    return (
+      <div className="simulation-summary-modal">
+        <div className="modal-content">
+          <h2>Mission Summary</h2>
+          <div className="summary-grid">
+            <div className="summary-item">
+              <span className="label">Photos Taken:</span>
+              <span className="value">{simulationSummary.photosTaken}</span>
+            </div>
+            <div className="summary-item">
+              <span className="label">Waypoints Completed:</span>
+              <span className="value">{simulationSummary.waypointsCompleted}</span>
+            </div>
+            <div className="summary-item">
+              <span className="label">Distance Flown:</span>
+              <span className="value">{simulationSummary.distanceFlown.toFixed(2)} meters</span>
+            </div>
+            <div className="summary-item">
+              <span className="label">Area Covered:</span>
+              <span className="value">{acresCovered} acres ({simulationSummary.areaCovered.toFixed(2)} m²)</span>
+            </div>
+            <div className="summary-item">
+              <span className="label">Mission Duration:</span>
+              <span className="value">{hours}h {minutes}m {seconds}s</span>
+            </div>
+          </div>
+          <button 
+            className="close-summary-btn"
+            onClick={() => setSimulationSummary(null)}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="map-container">
@@ -395,7 +497,6 @@ const InteractiveMap = forwardRef(({
           </LayersControl.BaseLayer>
         </LayersControl>
 
-        {/* Flight Grid */}
         <FlightGrid
           vertices={vertices}
           angle={flightAngle}
@@ -403,27 +504,27 @@ const InteractiveMap = forwardRef(({
           enhanced3d={enhanced3d}
         />
 
-        {/* Drone Position */}
         {dronePosition && (
           <DroneMarker
+            ref={droneMarkerRef}
             position={dronePosition}
             isActive={missionStatus.active}
           />
         )}
 
-        {/* Actual Flight Path */}
         {flightPath.length > 1 && (
           <Polyline
             positions={flightPath}
             pathOptions={{
               color: '#ff6b35',
               weight: 3,
-              opacity: 0.8
+              opacity: 0.8,
+              lineCap: 'round',
+              lineJoin: 'round'
             }}
           />
         )}
 
-        {/* Photo Locations */}
         {photoLocations.map((photo) => (
           <Marker
             key={`photo-${photo.id}`}
@@ -440,7 +541,6 @@ const InteractiveMap = forwardRef(({
           </Marker>
         ))}
 
-        {/* Flight Area Polygon */}
         <Polyline
           positions={[...vertices, vertices.length > 2 ? vertices[0] : null]}
           pathOptions={{
@@ -450,7 +550,6 @@ const InteractiveMap = forwardRef(({
           }}
         />
 
-        {/* Vertex Handles */}
         {vertices.map((position, index) => {
           const vertexIcon = L.divIcon({
             html: `<div class="vertex-handle-icon"></div>`,
@@ -483,7 +582,6 @@ const InteractiveMap = forwardRef(({
           );
         })}
 
-        {/* Midpoint Handles for Adding Vertices */}
         {midpoints.map((midpoint, index) => (
           <Marker
             key={`midpoint-${index}`}
@@ -503,7 +601,6 @@ const InteractiveMap = forwardRef(({
           />
         ))}
 
-        {/* Polygon Transform Handles */}
         <PolygonHandles
           vertices={vertices}
           onMove={onVerticesChange}
@@ -511,14 +608,12 @@ const InteractiveMap = forwardRef(({
           onDragEnd={onInteractionEnd}
         />
 
-        {/* Project Center Marker */}
         {project && (
           <Marker position={[project.latitude, project.longitude]}>
             <Tooltip permanent>{project.name}</Tooltip>
           </Marker>
         )}
 
-        {/* Mission Status Overlay */}
         {missionStatus.active && (
           <div className="mission-status-overlay">
             <div className="mission-progress">
@@ -537,11 +632,17 @@ const InteractiveMap = forwardRef(({
         )}
       </MapContainer>
 
-      {/* Connection Status */}
+      <DroneAnimation
+        status={animationState.status}
+        altitude={animationState.altitude}
+      />
+
       <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}>
         <div className="status-indicator"></div>
         <span>{isConnected ? 'Simulation Engine Connected' : 'Connecting...'}</span>
       </div>
+
+      <SimulationSummaryModal />
     </div>
   );
 });
